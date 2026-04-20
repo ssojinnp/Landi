@@ -157,6 +157,8 @@ function App() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<Exclude<PlanRole, 'owner'>>('viewer')
   const [inviteError, setInviteError] = useState('')
+  const [inviteStatus, setInviteStatus] = useState('')
+  const [isInviting, setIsInviting] = useState(false)
   const [boardScale, setBoardScale] = useState(1)
   const [viewport, setViewport] = useState(() => ({ width: typeof window === 'undefined' ? 1440 : window.innerWidth, height: typeof window === 'undefined' ? 900 : window.innerHeight }))
   const [allowPortraitEditing, setAllowPortraitEditing] = useState(false)
@@ -284,7 +286,7 @@ function App() {
     setAuthUser(null)
   }
 
-  const inviteMember = () => {
+  const inviteMember = async () => {
     if (!selectedPlan || !authUser || !canManageSelectedPlan) return
     const email = inviteEmail.trim().toLowerCase()
     if (!email || !email.includes('@')) {
@@ -301,26 +303,100 @@ function App() {
       { id: `member-${crypto.randomUUID()}`, email, role: inviteRole, invitedAt: new Date().toISOString(), invitedBy: authUser.email },
     ]
     const accessEmails = Array.from(new Set([...(selectedPlan.accessEmails ?? []), selectedPlan.ownerEmail ?? authUser.email, email].map((item) => item.toLowerCase()).filter(Boolean)))
+    const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, accessEmails, updatedAt: new Date().toISOString() }, authUser)
     setInviteError('')
     setInviteEmail('')
     updateSelectedPlan({ members: nextMembers, accessEmails })
-  }
 
-  const updateMemberRole = (email: string, role: Exclude<PlanRole, 'owner'>) => {
-    if (!selectedPlan || !canManageSelectedPlan) return
-    updateSelectedPlan({ members: (selectedPlan.members ?? []).map((member) => member.email === email ? { ...member, role } : member) })
-  }
+    if (!supabase) {
+      setInviteStatus('권한을 추가했습니다. Supabase 설정 후에는 초대 메일도 발송됩니다.')
+      return
+    }
 
-  const removeMember = (email: string) => {
-    if (!selectedPlan || !canManageSelectedPlan) return
-    updateSelectedPlan({
-      members: (selectedPlan.members ?? []).filter((member) => member.email !== email),
-      accessEmails: (selectedPlan.accessEmails ?? []).filter((item) => item.toLowerCase() !== email.toLowerCase()),
+    setIsInviting(true)
+    const { error: saveError } = await supabase
+      .from('plans')
+      .upsert(planToSharedRow(nextPlan, authUser), { onConflict: 'id' })
+
+    if (saveError) {
+      setIsInviting(false)
+      setInviteError(`초대 권한 저장에 실패했습니다. ${saveError.message}`)
+      return
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData.session?.access_token
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+
+    if (!accessToken || !supabaseUrl || !supabaseKey) {
+      setIsInviting(false)
+      setInviteError('로그인 세션을 확인하지 못해 초대 메일을 발송하지 못했습니다.')
+      return
+    }
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/invite-member`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseKey,
+        'x-landi-auth': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ planId: nextPlan.id, email, role: inviteRole, redirectTo: window.location.origin }),
     })
+    const data = await response.json().catch(() => null)
+    setIsInviting(false)
+
+    if (!response.ok) {
+      const message = data?.error ?? data?.message ?? response.statusText
+      setInviteError(`권한은 추가됐지만 초대 메일 발송에 실패했습니다. ${message}`)
+      return
+    }
+    if (data?.emailSent === false) {
+      const detail = data?.detail ? ` 사유: ${data.detail}` : ''
+      setInviteStatus(`권한은 추가했습니다. 메일 발송은 실패했지만 대상자는 로그인 후 접근할 수 있습니다.${detail}`)
+      return
+    }
+    setInviteStatus(data?.emailKind === 'signin' ? '권한을 추가하고 로그인 안내 메일을 발송했습니다.' : '초대 메일을 발송했습니다.')
+  }
+
+  const persistMemberAccess = async (nextPlan: Plan, successMessage: string) => {
+    if (!supabase || !authUser) {
+      setInviteStatus(successMessage)
+      return
+    }
+
+    const { error } = await supabase
+      .from('plans')
+      .upsert(planToSharedRow(nextPlan, authUser), { onConflict: 'id' })
+
+    if (error) {
+      setInviteError(`권한 변경 저장에 실패했습니다. ${error.message}`)
+      return
+    }
+    setInviteError('')
+    setInviteStatus(successMessage)
+  }
+
+  const updateMemberRole = async (email: string, role: Exclude<PlanRole, 'owner'>) => {
+    if (!selectedPlan || !canManageSelectedPlan || !authUser) return
+    const nextMembers = (selectedPlan.members ?? []).map((member) => member.email === email ? { ...member, role } : member)
+    const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, updatedAt: new Date().toISOString() }, authUser)
+    updateSelectedPlan({ members: nextMembers })
+    await persistMemberAccess(nextPlan, '멤버 권한을 업데이트했습니다.')
+  }
+
+  const removeMember = async (email: string) => {
+    if (!selectedPlan || !canManageSelectedPlan || !authUser) return
+    const nextMembers = (selectedPlan.members ?? []).filter((member) => member.email !== email)
+    const nextAccessEmails = (selectedPlan.accessEmails ?? []).filter((item) => item.toLowerCase() !== email.toLowerCase())
+    const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, accessEmails: nextAccessEmails, updatedAt: new Date().toISOString() }, authUser)
+    updateSelectedPlan({ members: nextMembers, accessEmails: nextAccessEmails })
+    await persistMemberAccess(nextPlan, '멤버 접근 권한을 삭제했습니다.')
   }
 
   const createNewPlan = () => {
-    const next = createPlan(`새 조감도 ${plans.length + 1}`)
+    const next = createPlan(`새 조감도 ${plans.length + 1}`, authUser)
     setPlans((current) => [next, ...current])
     setSelectedPlanId(next.id)
     setSelectedPlantId(null)
@@ -522,6 +598,7 @@ function App() {
   const leftPanelClass = `landi-editor-panel ${isPaletteCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full overflow-y-auto shrink-0 flex-col border-b border-slate-200 bg-[#fbfbf8] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:overflow-hidden lg:border-b-0 lg:border-r ${isPaletteCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
   const rightPanelClass = `landi-editor-panel ${isInspectorCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full overflow-y-auto shrink-0 flex-col border-t border-slate-200 bg-[#fbfbf8] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:overflow-hidden lg:border-l lg:border-t-0 ${isInspectorCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
   const roleLabel = selectedPlanRole === 'owner' ? '소유자' : selectedPlanRole === 'editor' ? '수정가능' : '읽기전용'
+  const ownerLabel = selectedPlan?.ownerEmail ?? authUser?.email ?? '로컬 조감도'
   const darkModeToggle = <button type="button" onClick={() => setIsDarkMode((value) => !value)} className={`${actionButtonClass} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`} aria-label="다크모드 전환">{isDarkMode ? <Sun size={17} /> : <Moon size={17} />}{isDarkMode ? '라이트' : '다크'}</button>
   const authControls = authUser ? <div className="flex h-10 items-center overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"><div className="hidden min-w-0 max-w-[190px] items-center gap-2 px-3 text-sm font-semibold text-slate-700 md:flex" title={authUser.email}><UserRound size={16} className="shrink-0 text-[#4f8738]" /><span className="truncate">{authUser.name}</span>{mode === 'edit' && <span className="shrink-0 text-xs font-semibold text-slate-400">{roleLabel}</span>}</div><button type="button" onClick={signOut} title="로그아웃" className="grid h-10 w-10 place-items-center border-l border-slate-200 text-slate-600 transition hover:bg-slate-50" aria-label="로그아웃"><LogOut size={17} /></button></div> : <button type="button" onClick={signInWithGoogle} className={`${actionButtonClass} border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50`}><LogIn size={17} />Google 로그인</button>
 
@@ -636,7 +713,7 @@ function App() {
 
       <aside className={rightPanelClass}><button type="button" onClick={() => setIsInspectorCollapsed(false)} className="landi-panel-toggle h-12 w-full items-center justify-between rounded-none border-0 border-t border-slate-200 bg-[#fbfbf8] px-4 text-slate-700 transition hover:bg-white lg:mx-auto lg:mt-3 lg:h-10 lg:w-10 lg:justify-center lg:rounded-md lg:border lg:bg-white lg:px-0 lg:shadow-sm" aria-label="선택 도구 펼치기"><span className="inline-flex items-center gap-2 text-sm font-semibold lg:hidden"><MousePointer2 size={17} className="text-[#4f8738]" />선택 도구</span><ChevronUp size={18} className="lg:hidden" /><PanelLeftOpen size={18} className="hidden lg:block" /></button>
         <div className="border-b border-slate-200 px-5 py-4 md:px-6 md:py-5"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-sm font-semibold text-slate-500"><MousePointer2 size={17} />선택 도구</div><button type="button" onClick={() => setIsInspectorCollapsed(true)} className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label="선택 도구 접기"><ChevronDown size={18} className="lg:hidden" /><PanelRightClose size={18} className="hidden lg:block" /></button></div><div className="mt-4 rounded-md bg-white p-4 shadow-sm ring-1 ring-slate-200">{selectedPlant ? <><div className="flex items-center justify-between"><div><p className="font-semibold text-slate-900">{selectedPlant.name}</p><p className="botanical-name text-xs text-slate-500">{selectedPlant.label}</p><p className="text-sm text-slate-500">{selectedPlant.category}</p></div><button type="button" onClick={deleteSelectedPlant} className="grid h-9 w-9 place-items-center rounded-md text-red-600 transition hover:bg-red-50" aria-label="선택 식물 삭제"><Trash2 size={18} /></button></div><div className="mt-4 flex items-center gap-2"><button type="button" onClick={() => updatePlant(selectedPlant.instanceId, { size: Math.max(28, selectedPlant.size - 8) })} className="grid h-9 w-9 place-items-center rounded-md bg-white text-slate-700 shadow-sm ring-1 ring-slate-200" aria-label="선택 식물 축소"><Minus size={18} /></button><div className="flex-1 rounded-md bg-[#f3f5ef] px-3 py-2 text-center text-sm font-semibold text-slate-600 ring-1 ring-slate-200">{Math.round(selectedPlant.size)}px</div><button type="button" onClick={() => updatePlant(selectedPlant.instanceId, { size: Math.min(180, selectedPlant.size + 8) })} className="grid h-9 w-9 place-items-center rounded-md bg-white text-slate-700 shadow-sm ring-1 ring-slate-200" aria-label="선택 식물 확대"><Plus size={18} /></button></div></> : <p className="text-sm leading-6 text-slate-500">배치된 식물을 선택하면 삭제 도구와 모서리 크기 조절 핸들이 표시됩니다.</p>}</div></div>
-        <section className="border-b border-slate-200 px-4 py-3 md:px-5"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-600">멤버 초대</h2><span className="text-[11px] font-semibold text-[#4f8738]">Share</span></div><div className="grid gap-2 rounded-md bg-white p-3 shadow-sm ring-1 ring-slate-200">{authUser ? <>{canManageSelectedPlan ? <><input value={inviteEmail} onChange={(event) => { setInviteEmail(event.target.value); if (inviteError) setInviteError('') }} placeholder="초대할 이메일" className="h-9 w-full min-w-0 rounded-md border border-slate-300 px-2.5 text-sm outline-none placeholder:text-xs placeholder:text-slate-400 focus:border-[#4f8738]" /><div className="grid grid-cols-[1fr_auto] gap-2"><select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as Exclude<PlanRole, 'owner'>)} className="h-9 rounded-md border border-slate-300 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[#4f8738]"><option value="viewer">읽기전용</option><option value="editor">수정가능</option></select><button type="button" onClick={inviteMember} className="inline-flex h-9 items-center justify-center rounded-md bg-[#4f8738] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#3f6f2d]">초대</button></div>{inviteError && <p className="text-xs font-semibold text-red-600" role="alert">{inviteError}</p>}</> : <p className="text-sm leading-6 text-slate-500">소유자만 멤버를 초대하고 권한을 변경할 수 있습니다.</p>}</> : <p className="text-sm leading-6 text-slate-500">Google 로그인 후 조감도를 공유할 수 있습니다.</p>}{(selectedPlan.members ?? []).length > 0 && <div className="grid gap-2 border-t border-slate-100 pt-2">{(selectedPlan.members ?? []).map((member) => <div key={member.email} className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-md bg-[#f8faf7] px-2 py-2"><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-700">{member.email}</p><p className="text-xs text-slate-500">{member.role === 'editor' ? '수정가능' : '읽기전용'}</p></div>{canManageSelectedPlan && <div className="flex items-center gap-1"><select value={member.role} onChange={(event) => updateMemberRole(member.email, event.target.value as Exclude<PlanRole, 'owner'>)} className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600"><option value="viewer">읽기</option><option value="editor">수정</option></select><button type="button" onClick={() => removeMember(member.email)} className="grid h-8 w-8 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label={`${member.email} 초대 제거`}><Trash2 size={14} /></button></div>}</div>)}</div>}</div></section>
+        <section className="border-b border-slate-200 px-4 py-3 md:px-5"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-600">멤버 초대</h2><span className="text-[11px] font-semibold text-[#4f8738]">Share</span></div><div className="grid gap-2 rounded-md bg-white p-3 shadow-sm ring-1 ring-slate-200"><div className="grid gap-1.5 rounded-md bg-[#f8faf7] px-3 py-2"><div className="flex items-center justify-between gap-2 text-xs"><span className="font-semibold text-slate-500">소유자</span><span className="truncate text-right font-semibold text-slate-700">{ownerLabel}</span></div>{authUser && <div className="flex items-center justify-between gap-2 text-xs"><span className="font-semibold text-slate-500">내 권한</span><span className="font-semibold text-[#4f8738]">{roleLabel}</span></div>}</div>{authUser ? <>{canManageSelectedPlan ? <><input value={inviteEmail} onChange={(event) => { setInviteEmail(event.target.value); if (inviteError) setInviteError(''); if (inviteStatus) setInviteStatus('') }} placeholder="초대할 이메일" className="h-9 w-full min-w-0 rounded-md border border-slate-300 px-2.5 text-sm outline-none placeholder:text-xs placeholder:text-slate-400 focus:border-[#4f8738]" /><div className="grid grid-cols-[1fr_auto] gap-2"><select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as Exclude<PlanRole, 'owner'>)} className="h-9 rounded-md border border-slate-300 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[#4f8738]"><option value="viewer">읽기전용</option><option value="editor">수정가능</option></select><button type="button" onClick={inviteMember} disabled={isInviting} className="inline-flex h-9 items-center justify-center rounded-md bg-[#4f8738] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#3f6f2d] disabled:cursor-wait disabled:opacity-70">{isInviting ? '발송중' : '초대'}</button></div>{inviteError && <p className="text-xs font-semibold text-red-600" role="alert">{inviteError}</p>}{inviteStatus && <p className="text-xs font-semibold text-[#4f8738]" role="status">{inviteStatus}</p>}</> : <p className="text-sm leading-6 text-slate-500">초대와 권한 변경은 소유자만 할 수 있습니다.</p>}</> : <p className="text-sm leading-6 text-slate-500">Google 로그인 후 조감도를 공유할 수 있습니다.</p>}{(selectedPlan.members ?? []).length > 0 && <div className="grid gap-2 border-t border-slate-100 pt-2">{(selectedPlan.members ?? []).map((member) => <div key={member.email} className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-md bg-[#f8faf7] px-2 py-2"><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-700">{member.email}</p><p className="text-xs text-slate-500">{member.role === 'editor' ? '수정가능' : '읽기전용'}</p></div>{canManageSelectedPlan && <div className="flex items-center gap-1"><select value={member.role} onChange={(event) => updateMemberRole(member.email, event.target.value as Exclude<PlanRole, 'owner'>)} className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600"><option value="viewer">읽기</option><option value="editor">수정</option></select><button type="button" onClick={() => removeMember(member.email)} className="grid h-8 w-8 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label={`${member.email} 초대 제거`}><Trash2 size={14} /></button></div>}</div>)}</div>}</div></section>
         <section className="border-b border-slate-200 px-4 py-3 md:px-5"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-600">표현 설정</h2><span className="text-[11px] font-semibold text-[#4f8738]">View</span></div><div className="grid gap-3 rounded-md bg-white p-3 shadow-sm ring-1 ring-slate-200"><label className="grid gap-1.5 text-xs font-semibold text-slate-500"><span className="flex items-center justify-between"><span>도면 밝기</span><span>{selectedPlan.backgroundFade ?? 62}%</span></span><input type="range" min="0" max="86" value={selectedPlan.backgroundFade ?? 62} onChange={(event) => updateSelectedPlan({ backgroundFade: Number(event.target.value) })} className="landi-range" /></label><label className="grid gap-1.5 text-xs font-semibold text-slate-500"><span className="flex items-center justify-between"><span>식재 진하기</span><span>{selectedPlan.plantIntensity ?? 125}%</span></span><input type="range" min="70" max="155" value={selectedPlan.plantIntensity ?? 125} onChange={(event) => updateSelectedPlan({ plantIntensity: Number(event.target.value) })} className="landi-range" /></label></div></section>
         <section className="flex min-h-0 flex-1 flex-col px-5 py-4 md:px-6 md:py-5"><div className="mb-4 flex shrink-0 items-end justify-between"><div><h2 className="text-lg font-semibold tracking-normal">수량 집계</h2><p className="text-sm text-slate-500">Plant schedule</p></div><span className="rounded-md bg-[#edf6e7] px-2.5 py-1 text-sm font-semibold text-[#4f8738]">총 {selectedPlan.plants.length}</span></div><div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto pr-1 md:grid-cols-5 lg:block lg:space-y-2">{inventory.map((item) => <div key={item.id} className="flex items-center justify-between rounded-md border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-center gap-3"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.colors.primary }} /><div><p className="text-sm font-semibold text-slate-800">{item.name}</p><p className="botanical-name text-xs text-slate-500">{item.label}</p></div></div><span className="text-lg font-semibold text-slate-900">{item.count}</span></div>)}</div></section>
       </aside>
@@ -645,4 +722,9 @@ function App() {
 }
 
 export default App
+
+
+
+
+
 
