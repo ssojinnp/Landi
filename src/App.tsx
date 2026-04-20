@@ -150,6 +150,8 @@ function App() {
   const [exportError, setExportError] = useState('')
   const [isExporting, setIsExporting] = useState(false)
   const [boardScale, setBoardScale] = useState(1)
+  const [viewport, setViewport] = useState(() => ({ width: typeof window === 'undefined' ? 1440 : window.innerWidth, height: typeof window === 'undefined' ? 900 : window.innerHeight }))
+  const [allowPortraitEditing, setAllowPortraitEditing] = useState(false)
   const boardFrameRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
 
@@ -157,6 +159,17 @@ function App() {
   const selectedPlant = selectedPlan?.plants.find((plant) => plant.instanceId === selectedPlantId)
 
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(plans)), [plans])
+  useEffect(() => {
+    const updateViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
+    updateViewport()
+    window.addEventListener('resize', updateViewport)
+    window.addEventListener('orientationchange', updateViewport)
+    return () => {
+      window.removeEventListener('resize', updateViewport)
+      window.removeEventListener('orientationchange', updateViewport)
+    }
+  }, [])
+
   useEffect(() => {
     const frame = boardFrameRef.current
     if (!frame) return
@@ -369,6 +382,9 @@ function App() {
   }
 
   const backgroundOverlay = Math.min(0.86, Math.max(0, (selectedPlan?.backgroundFade ?? 62) / 100))
+  const isMobileViewport = viewport.width < 768
+  const isTabletPortrait = viewport.width >= 768 && viewport.width < 1280 && viewport.height > viewport.width
+  const shouldShowOrientationLock = mode === 'edit' && selectedPlan && (isMobileViewport || (isTabletPortrait && !allowPortraitEditing))
   const actionButtonClass = "landi-action-button inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 font-semibold shadow-sm transition"
   const leftPanelClass = `landi-editor-panel ${isPaletteCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full overflow-y-auto shrink-0 flex-col border-b border-slate-200 bg-[#fbfbf8] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:overflow-hidden lg:border-b-0 lg:border-r ${isPaletteCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
   const rightPanelClass = `landi-editor-panel ${isInspectorCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full overflow-y-auto shrink-0 flex-col border-t border-slate-200 bg-[#fbfbf8] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:overflow-hidden lg:border-l lg:border-t-0 ${isInspectorCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
@@ -461,7 +477,24 @@ function App() {
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex h-[74px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#fbfbf8] px-4 py-3 md:px-6"><label className="group flex min-w-[240px] flex-1 cursor-text items-center gap-2 rounded-md border border-transparent px-2 py-1.5 transition hover:border-[#9fbd86] hover:bg-white/70 focus-within:border-[#4f8738] focus-within:bg-white focus-within:shadow-sm"><span className="sr-only">조감도 제목</span><input value={selectedPlan.title} onChange={(event) => updateSelectedPlan({ title: event.target.value })} className="min-w-0 flex-1 bg-transparent text-2xl font-semibold tracking-normal outline-none" aria-label="조감도 제목" /><Pencil size={16} className="shrink-0 text-slate-400 transition group-hover:text-[#4f8738]" aria-hidden="true" /></label><div className="flex flex-wrap items-center gap-2">{darkModeToggle}<button type="button" onClick={exportPlanImage} disabled={isExporting} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d] disabled:cursor-wait disabled:opacity-70`}><Download size={17} />{isExporting ? "내보내는 중" : "이미지 내보내기"}</button><label className={`${actionButtonClass} cursor-pointer bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><ImagePlus size={17} />도면 업로드<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="sr-only" /></label></div></header>
         {exportError && <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{exportError}</div>}
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-0 md:p-2 lg:p-2"><div ref={boardFrameRef} className="mx-auto w-full max-w-[1120px] rounded-md bg-white p-1.5 shadow-[0_18px_48px_rgba(47,55,43,0.12)] md:p-2"><div className="relative overflow-visible" style={{ width: '100%', height: BOARD_HEIGHT * boardScale }}><div ref={canvasRef} data-export-board="true" onClick={() => setSelectedPlantId(null)} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop} className="relative origin-top-left overflow-visible border border-[#d8ded4] bg-[#f7f7f2]" style={{ width: BOARD_WIDTH, height: BOARD_HEIGHT, transform: `scale(${boardScale})`, backgroundImage: selectedPlan.backgroundUrl ? `linear-gradient(rgba(255,255,255,${backgroundOverlay}), rgba(255,255,255,${backgroundOverlay})), url(${selectedPlan.backgroundUrl})` : undefined, backgroundPosition: 'center', backgroundSize: selectedPlan.backgroundUrl ? 'contain' : undefined, backgroundRepeat: selectedPlan.backgroundUrl ? 'no-repeat' : undefined }}>{!selectedPlan.backgroundUrl && <PlanBase fade={selectedPlan.backgroundFade ?? 62} />}{!selectedPlan.backgroundUrl && selectedPlan.plants.length === 0 && <div className="pointer-events-none absolute left-1/2 top-[52%] -translate-x-1/2 rounded-md border border-dashed px-5 py-4 text-center shadow-sm backdrop-blur-sm" style={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(148, 163, 184, 0.6)' }}><Layers className="mx-auto mb-2 text-[#4f8738]" size={26} /><p className="font-semibold" style={{ color: '#1e293b' }}>팔레트에서 식물을 얹어보세요</p><p className="mt-1 text-sm" style={{ color: '#64748b' }}>등록한 식재를 탭하거나 드래그해서 배치할 수 있습니다.</p></div>}{selectedPlan.plants.map((plant) => <PlacedPlant key={plant.instanceId} plant={plant} selected={selectedPlantId === plant.instanceId} plantIntensity={selectedPlan.plantIntensity ?? 125} boardScale={boardScale} onSelect={() => setSelectedPlantId(plant.instanceId)} onMove={(updates) => updatePlant(plant.instanceId, updates)} onResize={(updates) => updatePlant(plant.instanceId, updates)} />)}</div></div></div></div>
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto p-0 md:p-2 lg:p-2">
+          <div className={`transition duration-200 ${shouldShowOrientationLock ? 'pointer-events-none opacity-25 blur-[1px]' : ''}`}>
+            <div ref={boardFrameRef} className="mx-auto w-full max-w-[1120px] rounded-md bg-white p-1.5 shadow-[0_18px_48px_rgba(47,55,43,0.12)] md:p-2">
+              <div className="relative overflow-hidden" style={{ width: BOARD_WIDTH * boardScale, maxWidth: '100%', height: BOARD_HEIGHT * boardScale }}>
+                <div ref={canvasRef} data-export-board="true" onClick={() => setSelectedPlantId(null)} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop} className="relative origin-top-left overflow-visible border border-[#d8ded4] bg-[#f7f7f2]" style={{ width: BOARD_WIDTH, height: BOARD_HEIGHT, transform: `scale(${boardScale})`, backgroundImage: selectedPlan.backgroundUrl ? `linear-gradient(rgba(255,255,255,${backgroundOverlay}), rgba(255,255,255,${backgroundOverlay})), url(${selectedPlan.backgroundUrl})` : undefined, backgroundPosition: 'center', backgroundSize: selectedPlan.backgroundUrl ? 'contain' : undefined, backgroundRepeat: selectedPlan.backgroundUrl ? 'no-repeat' : undefined }}>{!selectedPlan.backgroundUrl && <PlanBase fade={selectedPlan.backgroundFade ?? 62} />}{!selectedPlan.backgroundUrl && selectedPlan.plants.length === 0 && <div className="pointer-events-none absolute left-1/2 top-[52%] -translate-x-1/2 rounded-md border border-dashed px-5 py-4 text-center shadow-sm backdrop-blur-sm" style={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(148, 163, 184, 0.6)' }}><Layers className="mx-auto mb-2 text-[#4f8738]" size={26} /><p className="font-semibold" style={{ color: '#1e293b' }}>팔레트에서 식물을 얹어보세요</p><p className="mt-1 text-sm" style={{ color: '#64748b' }}>등록한 식재를 탭하거나 드래그해서 배치할 수 있습니다.</p></div>}{selectedPlan.plants.map((plant) => <PlacedPlant key={plant.instanceId} plant={plant} selected={selectedPlantId === plant.instanceId} plantIntensity={selectedPlan.plantIntensity ?? 125} boardScale={boardScale} onSelect={() => setSelectedPlantId(plant.instanceId)} onMove={(updates) => updatePlant(plant.instanceId, updates)} onResize={(updates) => updatePlant(plant.instanceId, updates)} />)}</div>
+              </div>
+            </div>
+          </div>
+          {shouldShowOrientationLock && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/45 px-5 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
+              <div className="w-full max-w-[420px] rounded-md border border-white/70 bg-white px-5 py-5 text-center shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
+                <p id="orientation-lock-title" className="text-lg font-semibold text-slate-950">가로모드에 최적화되어 있습니다</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">태블릿을 가로로 돌리면 도면과 식재 위치를 더 넓고 정확하게 편집할 수 있습니다.</p>
+                {!isMobileViewport && <button type="button" onClick={() => setAllowPortraitEditing(true)} className="mt-4 inline-flex h-10 items-center justify-center rounded-md bg-[#4f8738] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3f6f2d]">세로에서 계속하기</button>}
+              </div>
+            </div>
+          )}
+        </div>
       </section>
 
       <aside className={rightPanelClass}><button type="button" onClick={() => setIsInspectorCollapsed(false)} className="landi-panel-toggle h-12 w-full items-center justify-between rounded-none border-0 border-t border-slate-200 bg-[#fbfbf8] px-4 text-slate-700 transition hover:bg-white lg:mx-auto lg:mt-3 lg:h-10 lg:w-10 lg:justify-center lg:rounded-md lg:border lg:bg-white lg:px-0 lg:shadow-sm" aria-label="선택 도구 펼치기"><span className="inline-flex items-center gap-2 text-sm font-semibold lg:hidden"><MousePointer2 size={17} className="text-[#4f8738]" />선택 도구</span><ChevronUp size={18} className="lg:hidden" /><PanelLeftOpen size={18} className="hidden lg:block" /></button>
@@ -474,13 +507,5 @@ function App() {
 }
 
 export default App
-
-
-
-
-
-
-
-
 
 
