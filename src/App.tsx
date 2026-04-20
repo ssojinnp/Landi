@@ -3,14 +3,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import type { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent } from 'react'
 import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable'
-import { ArrowLeft, ChevronDown, ChevronUp, Download, Eye, ImagePlus, Layers, Minus, Moon, MousePointer2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, Sprout, Sun, Trash2, Trees } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, Download, Eye, ImagePlus, Layers, LogIn, LogOut, Minus, Moon, MousePointer2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, Sprout, Sun, Trash2, Trees, UserRound } from 'lucide-react'
 import { PlanBase } from './components/canvas/PlanBase'
 import { PlantSymbol } from './components/canvas/PlantSymbol'
 import { BOARD_HEIGHT, BOARD_WIDTH, defaultPalette, flowerColorOptions, kindOptions, plantToneOptions, STORAGE_KEY } from './data/plants'
-import type { Plan, Plant, PlantKind, PlantTemplate, ViewMode } from './types'
+import { getPlanRole, getSessionUser, isSupabaseConfigured, normalizePlanForUser, planToSharedRow, sharedRowToPlan, supabase, type LandiUser, type SharedPlanRow } from './lib/supabase'
+import type { Plan, Plant, PlantKind, PlantTemplate, PlanRole, ViewMode } from './types'
 
-function createPlan(title = '새 조감도'): Plan {
-  return { id: `plan-${crypto.randomUUID()}`, title, updatedAt: new Date().toISOString(), backgroundUrl: null, palette: defaultPalette, plants: [], backgroundFade: 62, plantIntensity: 125 }
+function createPlan(title = '새 조감도', user?: LandiUser | null): Plan {
+  const plan: Plan = { id: `plan-${crypto.randomUUID()}`, title, updatedAt: new Date().toISOString(), backgroundUrl: null, palette: defaultPalette, plants: [], backgroundFade: 62, plantIntensity: 125 }
+  return user ? normalizePlanForUser(plan, user) : plan
 }
 
 function loadPlans(): Plan[] {
@@ -48,13 +50,14 @@ function ResizeHandle({ anchor, onResizeStart }: { anchor: ResizeAnchor; onResiz
   return <button type="button" onPointerDown={(event) => onResizeStart(anchor, event)} className={`resize-handle export-hidden absolute h-3 w-3 touch-none rounded-[2px] border shadow-sm ${positionMap[anchor]}`} style={{ backgroundColor: '#2563eb', borderColor: '#ffffff' }} aria-label={`식재 ${anchor} 방향 크기 조절`} />
 }
 
-function PlacedPlant({ plant, selected, plantIntensity, boardScale, onSelect, onMove, onResize }: { plant: Plant; selected: boolean; plantIntensity: number; boardScale: number; onSelect: () => void; onMove: (updates: Pick<Plant, 'x' | 'y'>) => void; onResize: (updates: Pick<Plant, 'x' | 'y' | 'size'>) => void }) {
+function PlacedPlant({ plant, selected, plantIntensity, boardScale, readOnly, onSelect, onMove, onResize }: { plant: Plant; selected: boolean; plantIntensity: number; boardScale: number; readOnly: boolean; onSelect: () => void; onMove: (updates: Pick<Plant, 'x' | 'y'>) => void; onResize: (updates: Pick<Plant, 'x' | 'y' | 'size'>) => void }) {
   const nodeRef = useRef<HTMLDivElement>(null)
   const handles: ResizeAnchor[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
   const symbolOpacity = Math.min(1, Math.max(0.55, plantIntensity / 100))
   const symbolFilter = `saturate(${Math.max(100, plantIntensity)}%) contrast(${Math.max(100, plantIntensity - 8)}%)`
 
   const startResize = (anchor: ResizeAnchor, event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (readOnly) return
     event.preventDefault()
     event.stopPropagation()
     const startX = event.clientX
@@ -87,13 +90,13 @@ function PlacedPlant({ plant, selected, plantIntensity, boardScale, onSelect, on
   }
 
   return (
-    <Draggable nodeRef={nodeRef} position={{ x: plant.x, y: plant.y }} bounds="parent" cancel=".resize-handle" scale={boardScale} onStop={(_: DraggableEvent, data: DraggableData) => onMove({ x: data.x, y: data.y })}>
-      <div ref={nodeRef} onClick={(event) => { event.stopPropagation(); onSelect() }} className="group absolute cursor-move touch-none select-none" style={{ width: plant.size + 56, height: plant.size + 54, filter: 'drop-shadow(0 24px 20px rgba(12, 26, 12, 0.42)) drop-shadow(8px 12px 10px rgba(42, 54, 36, 0.28))' }}>
+    <Draggable nodeRef={nodeRef} position={{ x: plant.x, y: plant.y }} bounds="parent" cancel=".resize-handle" disabled={readOnly} scale={boardScale} onStop={(_: DraggableEvent, data: DraggableData) => onMove({ x: data.x, y: data.y })}>
+      <div ref={nodeRef} onClick={(event) => { event.stopPropagation(); onSelect() }} className={`group absolute touch-none select-none ${readOnly ? 'cursor-default' : 'cursor-move'}`} style={{ width: plant.size + 56, height: plant.size + 54, filter: 'drop-shadow(0 24px 20px rgba(12, 26, 12, 0.42)) drop-shadow(8px 12px 10px rgba(42, 54, 36, 0.28))' }}>
         <div className={`absolute left-4 top-3 ${selected ? 'rounded-md outline outline-1 outline-offset-1' : ''}`} style={{ opacity: selected ? Math.min(0.92, symbolOpacity) : symbolOpacity, filter: symbolFilter, outlineColor: selected ? '#2563eb' : undefined }}>
           <PlantSymbol plant={plant} />
         </div>
         <div className="export-hidden pointer-events-none absolute left-1/2 top-[calc(100%-10px)] -translate-x-1/2 whitespace-nowrap rounded-sm px-2 py-0.5 text-[10px] font-semibold opacity-0 shadow-sm transition-opacity group-hover:opacity-100" style={{ backgroundColor: 'rgba(15, 23, 42, 0.88)', color: '#ffffff' }}>{plant.name}</div>
-        {selected && handles.map((anchor) => <ResizeHandle key={anchor} anchor={anchor} onResizeStart={startResize} />)}
+        {selected && !readOnly && handles.map((anchor) => <ResizeHandle key={anchor} anchor={anchor} onResizeStart={startResize} />)}
       </div>
     </Draggable>
   )
@@ -149,16 +152,86 @@ function App() {
   const [paletteFormError, setPaletteFormError] = useState('')
   const [exportError, setExportError] = useState('')
   const [isExporting, setIsExporting] = useState(false)
+  const [authUser, setAuthUser] = useState<LandiUser | null>(null)
+  const [authError, setAuthError] = useState('')
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<Exclude<PlanRole, 'owner'>>('viewer')
+  const [inviteError, setInviteError] = useState('')
   const [boardScale, setBoardScale] = useState(1)
   const [viewport, setViewport] = useState(() => ({ width: typeof window === 'undefined' ? 1440 : window.innerWidth, height: typeof window === 'undefined' ? 900 : window.innerHeight }))
   const [allowPortraitEditing, setAllowPortraitEditing] = useState(false)
   const boardFrameRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
+  const applyingRemotePlansRef = useRef(false)
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? plans[0]
   const selectedPlant = selectedPlan?.plants.find((plant) => plant.instanceId === selectedPlantId)
+  const selectedPlanRole = selectedPlan ? getPlanRole(selectedPlan, authUser) : 'viewer'
+  const canEditSelectedPlan = selectedPlanRole === 'owner' || selectedPlanRole === 'editor'
+  const canManageSelectedPlan = selectedPlanRole === 'owner' && Boolean(authUser)
 
-  useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(plans)), [plans])
+  useEffect(() => {
+    if (!supabase) return
+
+    supabase.auth.getSession().then(({ data }) => setAuthUser(getSessionUser(data.session)))
+    const { data } = supabase.auth.onAuthStateChange((_, session) => setAuthUser(getSessionUser(session)))
+    return () => data.subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    const supabaseClient = supabase
+    if (!supabaseClient || !authUser?.email) return
+    let active = true
+
+    const loadSharedPlans = async () => {
+      const { data, error } = await supabaseClient
+        .from('plans')
+        .select('*')
+        .contains('access_emails', [authUser.email.toLowerCase()])
+        .order('updated_at', { ascending: false })
+
+      if (!active) return
+      if (error) {
+        setAuthError(`공유 조감도를 불러오지 못했습니다. ${error.message}`)
+        return
+      }
+      if (data && data.length > 0) {
+        applyingRemotePlansRef.current = true
+        const sharedPlans = (data as SharedPlanRow[]).map(sharedRowToPlan)
+        setPlans(sharedPlans)
+        setSelectedPlanId((current) => sharedPlans.some((plan) => plan.id === current) ? current : sharedPlans[0].id)
+      }
+    }
+
+    void loadSharedPlans()
+    const channel = supabaseClient.channel('landi-plans-sync').on('postgres_changes', { event: '*', schema: 'public', table: 'plans' }, () => void loadSharedPlans()).subscribe()
+    return () => {
+      active = false
+      void supabaseClient.removeChannel(channel)
+    }
+  }, [authUser])
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(plans))
+    if (applyingRemotePlansRef.current) {
+      applyingRemotePlansRef.current = false
+      return
+    }
+    if (!supabase || !authUser) return
+
+    const editablePlans = plans.filter((plan) => {
+      const role = getPlanRole(plan, authUser)
+      return role === 'owner' || role === 'editor'
+    })
+    if (editablePlans.length === 0) return
+
+    void supabase
+      .from('plans')
+      .upsert(editablePlans.map((plan) => planToSharedRow(plan, authUser)), { onConflict: 'id' })
+      .then(({ error }) => {
+        if (error) setAuthError(`공유 조감도를 저장하지 못했습니다. ${error.message}`)
+      })
+  }, [plans, authUser])
   useEffect(() => {
     const updateViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
     updateViewport()
@@ -183,12 +256,68 @@ function App() {
   }, [mode])
 
   const updateSelectedPlan = (updates: Partial<Plan>) => {
-    if (!selectedPlan) return
-    setPlans((current) => current.map((plan) => plan.id === selectedPlan.id ? { ...plan, ...updates, updatedAt: new Date().toISOString() } : plan))
+    if (!selectedPlan || !canEditSelectedPlan) return
+    setPlans((current) => current.map((plan) => {
+      if (plan.id !== selectedPlan.id) return plan
+      const nextPlan = { ...plan, ...updates, updatedAt: new Date().toISOString() }
+      return authUser ? normalizePlanForUser(nextPlan, authUser) : nextPlan
+    }))
   }
   const updatePlants = (updater: (plants: Plant[]) => Plant[]) => selectedPlan && updateSelectedPlan({ plants: updater(selectedPlan.plants) })
 
   const inventory = useMemo(() => selectedPlan?.palette.map((template) => ({ ...template, count: selectedPlan.plants.filter((plant) => plant.templateId === template.id).length })) ?? [], [selectedPlan])
+
+  const signInWithGoogle = async () => {
+    setAuthError('')
+    if (!supabase) {
+      setAuthError('Supabase 환경 변수가 설정되지 않았습니다. .env에 VITE_SUPABASE_URL과 VITE_SUPABASE_ANON_KEY를 추가해주세요.')
+      return
+    }
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
+    if (error) setAuthError(`구글 로그인에 실패했습니다. ${error.message}`)
+  }
+
+  const signOut = async () => {
+    if (!supabase) return
+    const { error } = await supabase.auth.signOut()
+    if (error) setAuthError(`로그아웃에 실패했습니다. ${error.message}`)
+    setAuthUser(null)
+  }
+
+  const inviteMember = () => {
+    if (!selectedPlan || !authUser || !canManageSelectedPlan) return
+    const email = inviteEmail.trim().toLowerCase()
+    if (!email || !email.includes('@')) {
+      setInviteError('초대할 이메일을 입력해주세요.')
+      return
+    }
+    if (email === authUser.email.toLowerCase()) {
+      setInviteError('소유자 본인은 초대할 수 없습니다.')
+      return
+    }
+
+    const nextMembers = [
+      ...(selectedPlan.members ?? []).filter((member) => member.email.toLowerCase() !== email),
+      { id: `member-${crypto.randomUUID()}`, email, role: inviteRole, invitedAt: new Date().toISOString(), invitedBy: authUser.email },
+    ]
+    const accessEmails = Array.from(new Set([...(selectedPlan.accessEmails ?? []), selectedPlan.ownerEmail ?? authUser.email, email].map((item) => item.toLowerCase()).filter(Boolean)))
+    setInviteError('')
+    setInviteEmail('')
+    updateSelectedPlan({ members: nextMembers, accessEmails })
+  }
+
+  const updateMemberRole = (email: string, role: Exclude<PlanRole, 'owner'>) => {
+    if (!selectedPlan || !canManageSelectedPlan) return
+    updateSelectedPlan({ members: (selectedPlan.members ?? []).map((member) => member.email === email ? { ...member, role } : member) })
+  }
+
+  const removeMember = (email: string) => {
+    if (!selectedPlan || !canManageSelectedPlan) return
+    updateSelectedPlan({
+      members: (selectedPlan.members ?? []).filter((member) => member.email !== email),
+      accessEmails: (selectedPlan.accessEmails ?? []).filter((item) => item.toLowerCase() !== email.toLowerCase()),
+    })
+  }
 
   const createNewPlan = () => {
     const next = createPlan(`새 조감도 ${plans.length + 1}`)
@@ -198,9 +327,12 @@ function App() {
     setMode('edit')
   }
   const deletePlan = (planId: string) => {
+    const targetPlan = plans.find((plan) => plan.id === planId)
+    if (!targetPlan || getPlanRole(targetPlan, authUser) !== 'owner') return
     const nextPlans = plans.filter((plan) => plan.id !== planId)
-    const fallback = nextPlans[0] ?? createPlan('새 조감도')
+    const fallback = nextPlans[0] ?? createPlan('새 조감도', authUser)
     setPlans(nextPlans.length > 0 ? nextPlans : [fallback])
+    if (supabase && authUser) void supabase.from('plans').delete().eq('id', planId)
     if (selectedPlanId === planId) { setSelectedPlanId(fallback.id); setSelectedPlantId(null); setMode('list') }
   }
   const openPreview = (planId: string) => { setSelectedPlanId(planId); setSelectedPlantId(null); setMode('preview') }
@@ -224,7 +356,7 @@ function App() {
   }
 
   const validatePaletteForm = () => {
-    if (!selectedPlan) return '조감도를 먼저 선택해주세요.'
+    if (!selectedPlan || !canEditSelectedPlan) return '조감도를 먼저 선택해주세요.'
     const name = newPlantName.trim()
     if (!name) return '식재명을 입력해주세요.'
     const duplicateName = selectedPlan.palette.some((template) => template.id !== editingTemplateId && template.name.trim().toLocaleLowerCase('ko-KR') === name.toLocaleLowerCase('ko-KR'))
@@ -239,7 +371,7 @@ function App() {
       setPaletteFormError(error)
       return
     }
-    if (!selectedPlan) return
+    if (!selectedPlan || !canEditSelectedPlan) return
     setPaletteFormError('')
     const nextTemplate = createTemplate(newPlantKind, newPlantName.trim(), newPlantLabel.trim(), newFlowerColor)
 
@@ -262,7 +394,7 @@ function App() {
   }
 
   const deleteTemplateFromPalette = (templateId: string) => {
-    if (!selectedPlan) return
+    if (!selectedPlan || !canEditSelectedPlan) return
     updateSelectedPlan({
       palette: selectedPlan.palette.filter((template) => template.id !== templateId),
       plants: selectedPlan.plants.filter((plant) => plant.templateId !== templateId),
@@ -271,22 +403,23 @@ function App() {
     if (selectedPlant?.templateId === templateId) setSelectedPlantId(null)
   }
   const addPlant = (template: PlantTemplate, x = 520, y = 330) => {
+    if (!canEditSelectedPlan) return
     const instanceId = `${template.id}-${crypto.randomUUID()}`
     updatePlants((current) => [...current, { ...template, instanceId, templateId: template.id, x: x - template.size / 2, y: y - template.size / 2 }])
     setSelectedPlantId(instanceId)
   }
-  const updatePlant = (instanceId: string, updates: Partial<Plant>) => updatePlants((current) => current.map((plant) => plant.instanceId === instanceId ? { ...plant, ...updates } : plant))
-  const deleteSelectedPlant = () => { if (selectedPlantId) { updatePlants((current) => current.filter((plant) => plant.instanceId !== selectedPlantId)); setSelectedPlantId(null) } }
+  const updatePlant = (instanceId: string, updates: Partial<Plant>) => canEditSelectedPlan && updatePlants((current) => current.map((plant) => plant.instanceId === instanceId ? { ...plant, ...updates } : plant))
+  const deleteSelectedPlant = () => { if (selectedPlantId && canEditSelectedPlan) { updatePlants((current) => current.filter((plant) => plant.instanceId !== selectedPlantId)); setSelectedPlantId(null) } }
   const handleUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (!file) return
+    if (!file || !canEditSelectedPlan) return
     const reader = new FileReader()
     reader.onload = () => updateSelectedPlan({ backgroundUrl: String(reader.result) })
     reader.readAsDataURL(file)
   }
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
-    if (!selectedPlan) return
+    if (!selectedPlan || !canEditSelectedPlan) return
     const template = selectedPlan.palette.find((item) => item.id === event.dataTransfer.getData('template-id'))
     const canvasBounds = canvasRef.current?.getBoundingClientRect()
     if (template && canvasBounds) addPlant(template, (event.clientX - canvasBounds.left) / boardScale, (event.clientY - canvasBounds.top) / boardScale)
@@ -389,13 +522,14 @@ function App() {
   const leftPanelClass = `landi-editor-panel ${isPaletteCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full overflow-y-auto shrink-0 flex-col border-b border-slate-200 bg-[#fbfbf8] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:overflow-hidden lg:border-b-0 lg:border-r ${isPaletteCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
   const rightPanelClass = `landi-editor-panel ${isInspectorCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full overflow-y-auto shrink-0 flex-col border-t border-slate-200 bg-[#fbfbf8] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:overflow-hidden lg:border-l lg:border-t-0 ${isInspectorCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
   const darkModeToggle = <button type="button" onClick={() => setIsDarkMode((value) => !value)} className={`${actionButtonClass} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`} aria-label="다크모드 전환">{isDarkMode ? <Sun size={17} /> : <Moon size={17} />}{isDarkMode ? '라이트' : '다크'}</button>
+  const authControls = authUser ? <div className="flex h-10 items-center overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"><div className="hidden min-w-0 max-w-[160px] items-center gap-2 px-3 text-sm font-semibold text-slate-700 md:flex" title={authUser.email}><UserRound size={16} className="shrink-0 text-[#4f8738]" /><span className="truncate">{authUser.name}</span></div><button type="button" onClick={signOut} title="로그아웃" className="grid h-10 w-10 place-items-center border-l border-slate-200 text-slate-600 transition hover:bg-slate-50" aria-label="로그아웃"><LogOut size={17} /></button></div> : <button type="button" onClick={signInWithGoogle} className={`${actionButtonClass} border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50`}><LogIn size={17} />Google 로그인</button>
 
   if (mode === 'list') {
-    return <main data-theme={isDarkMode ? "dark" : "light"} className="landi-app min-h-screen bg-[#eceee8] px-5 py-6 text-slate-900 md:px-8"><header className="mx-auto mb-6 flex max-w-6xl flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-md bg-[#4f8738] text-white shadow-sm"><Trees size={24} /></div><div><h1 className="text-2xl font-semibold tracking-normal">Landi</h1><p className="text-sm text-slate-500">조감도 목록</p></div></div><div className="flex flex-wrap gap-2">{darkModeToggle}<button type="button" onClick={createNewPlan} className="landi-action-button inline-flex items-center justify-center gap-2 rounded-md bg-[#4f8738] px-4 py-2.5 text-center text-white shadow-sm hover:bg-[#3f6f2d]"><Plus size={18} />새 조감도 생성</button></div></header><section className="mx-auto grid max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-3">{plans.map((plan) => <article key={plan.id} className="landi-plan-card rounded-md border border-slate-200 bg-white p-4 shadow-sm"><PlanThumbnail plan={plan} /><div className="mt-4 flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{plan.title}</h2><p className="text-sm text-slate-500">식재 {plan.plants.length}개 · {new Date(plan.updatedAt).toLocaleDateString()}</p></div><button type="button" onClick={() => deletePlan(plan.id)} className="grid h-9 w-9 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label="조감도 삭제"><Trash2 size={18} /></button></div><div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => openPreview(plan.id)} className="landi-action-button flex w-full items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-center text-slate-700 hover:bg-slate-50"><Eye size={17} />미리보기</button><button type="button" onClick={() => openEditor(plan.id)} className="landi-action-button flex w-full items-center justify-center gap-2 rounded-md bg-[#4f8738] px-4 py-2 text-center text-white shadow-sm hover:bg-[#3f6f2d]"><Pencil size={17} />편집보드</button></div></article>)}</section></main>
+    return <main data-theme={isDarkMode ? "dark" : "light"} className="landi-app min-h-screen bg-[#eceee8] px-5 py-6 text-slate-900 md:px-8"><header className="mx-auto mb-6 flex max-w-6xl flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-md bg-[#4f8738] text-white shadow-sm"><Trees size={24} /></div><div><h1 className="text-2xl font-semibold tracking-normal">Landi</h1><p className="text-sm text-slate-500">조감도 목록</p></div></div><div className="flex flex-wrap gap-2">{authControls}{darkModeToggle}<button type="button" onClick={createNewPlan} className="landi-action-button inline-flex items-center justify-center gap-2 rounded-md bg-[#4f8738] px-4 py-2.5 text-center text-white shadow-sm hover:bg-[#3f6f2d]"><Plus size={18} />새 조감도 생성</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{authError}</div>}{!isSupabaseConfigured && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">Supabase 환경 변수를 설정하면 Google 로그인과 멤버 초대가 활성화됩니다.</div>}<section className="mx-auto grid max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-3">{plans.map((plan) => <article key={plan.id} className="landi-plan-card rounded-md border border-slate-200 bg-white p-4 shadow-sm"><PlanThumbnail plan={plan} /><div className="mt-4 flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{plan.title}</h2><p className="text-sm text-slate-500">식재 {plan.plants.length}개 · {new Date(plan.updatedAt).toLocaleDateString()}</p></div><button type="button" onClick={() => deletePlan(plan.id)} className="grid h-9 w-9 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label="조감도 삭제"><Trash2 size={18} /></button></div><div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => openPreview(plan.id)} className="landi-action-button flex w-full items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-center text-slate-700 hover:bg-slate-50"><Eye size={17} />미리보기</button><button type="button" onClick={() => openEditor(plan.id)} className="landi-action-button flex w-full items-center justify-center gap-2 rounded-md bg-[#4f8738] px-4 py-2 text-center text-white shadow-sm hover:bg-[#3f6f2d]"><Pencil size={17} />편집보드</button></div></article>)}</section></main>
   }
 
   if (mode === 'preview' && selectedPlan) {
-    return <main data-theme={isDarkMode ? "dark" : "light"} className="landi-app min-h-screen bg-[#eceee8] p-5 text-slate-900 md:p-8"><header className="mx-auto mb-5 flex max-w-6xl flex-wrap items-center justify-between gap-3"><div><button type="button" onClick={() => setMode('list')} className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900"><ArrowLeft size={17} />목록으로</button><h1 className="text-2xl font-semibold">{selectedPlan.title}</h1><p className="text-sm text-slate-500">식재 {selectedPlan.plants.length}개 · 미리보기</p></div><div className="flex flex-wrap gap-2">{darkModeToggle}<button type="button" onClick={() => openEditor(selectedPlan.id)} className="inline-flex items-center gap-2 rounded-md bg-[#4f8738] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#3f6f2d]"><Pencil size={18} />편집보드로</button><button type="button" onClick={() => deletePlan(selectedPlan.id)} className="inline-flex items-center gap-2 rounded-md border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50"><Trash2 size={18} />삭제</button></div></header><section className="mx-auto max-w-6xl overflow-auto rounded-md bg-white p-4 shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><StaticPlanBoard plan={selectedPlan} /></section></main>
+    return <main data-theme={isDarkMode ? "dark" : "light"} className="landi-app min-h-screen bg-[#eceee8] p-5 text-slate-900 md:p-8"><header className="mx-auto mb-5 flex max-w-6xl flex-wrap items-center justify-between gap-3"><div><button type="button" onClick={() => setMode('list')} className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900"><ArrowLeft size={17} />목록으로</button><h1 className="text-2xl font-semibold">{selectedPlan.title}</h1><p className="text-sm text-slate-500">식재 {selectedPlan.plants.length}개 · 미리보기</p></div><div className="flex flex-wrap gap-2">{authControls}{darkModeToggle}<button type="button" onClick={() => openEditor(selectedPlan.id)} className="inline-flex items-center gap-2 rounded-md bg-[#4f8738] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#3f6f2d]"><Pencil size={18} />편집보드로</button><button type="button" onClick={() => deletePlan(selectedPlan.id)} className="inline-flex items-center gap-2 rounded-md border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50"><Trash2 size={18} />삭제</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{authError}</div>}<section className="mx-auto max-w-6xl overflow-auto rounded-md bg-white p-4 shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><StaticPlanBoard plan={selectedPlan} /></section></main>
   }
 
   if (!selectedPlan) return null
@@ -404,7 +538,7 @@ function App() {
     <main data-theme={isDarkMode ? "dark" : "light"} className="landi-app flex min-h-screen flex-col overflow-y-auto bg-[#eceee8] text-slate-900 lg:h-screen lg:min-h-0 lg:overflow-hidden lg:flex-row">
       <aside className={leftPanelClass}><button type="button" onClick={() => setIsPaletteCollapsed(false)} className="landi-panel-toggle h-12 w-full items-center justify-between rounded-none border-0 border-b border-slate-200 bg-[#fbfbf8] px-4 text-slate-700 transition hover:bg-white lg:mx-auto lg:mt-3 lg:h-10 lg:w-10 lg:justify-center lg:rounded-md lg:border lg:bg-white lg:px-0 lg:shadow-sm" aria-label="식재 팔레트 펼치기"><span className="inline-flex items-center gap-2 text-sm font-semibold lg:hidden"><Sprout size={17} className="text-[#4f8738]" />식재 팔레트</span><ChevronDown size={18} className="lg:hidden" /><PanelRightOpen size={18} className="hidden lg:block" /></button>
         <div className="flex h-[74px] shrink-0 items-center border-b border-slate-200 px-5 md:px-6"><div className="flex w-full items-center justify-between gap-3"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-md bg-[#4f8738] text-white shadow-sm"><Trees size={22} /></div><div><h1 className="text-xl font-semibold tracking-normal">Landi</h1><p className="text-sm text-slate-500">편집보드</p></div></div><div className="flex items-center gap-2"><button type="button" onClick={() => setMode('list')} className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label="목록으로"><ArrowLeft size={18} /></button><button type="button" onClick={() => setIsPaletteCollapsed(true)} className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label="식재 팔레트 접기"><ChevronUp size={18} className="lg:hidden" /><PanelLeftClose size={18} className="hidden lg:block" /></button></div></div></div>
-        <section className="flex min-h-0 flex-1 flex-col px-4 py-3 lg:overflow-hidden"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold uppercase tracking-normal text-slate-500">식재 팔레트</h2><Sprout size={18} className="text-[#4f8738]" /></div><div className="mb-3 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"><button type="button" onClick={() => setIsPaletteFormOpen((open) => !open)} className="flex h-11 w-full items-center justify-between gap-3 px-3 text-left text-sm font-semibold text-slate-700"><span>{editingTemplateId ? "식재 타입 수정" : "식재 타입 등록"}</span><span className="rounded-sm bg-[#edf6e7] px-2 py-1 text-[11px] font-semibold text-[#4f8738]">{isPaletteFormOpen ? "닫기" : "열기"}</span></button>{isPaletteFormOpen && <div className="grid gap-2 border-t border-slate-100 p-3"><select value={newPlantKind} onChange={(event) => setNewPlantKind(event.target.value as PlantKind)} className="h-9 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[#4f8738]">{kindOptions.map((option) => <option key={option.kind} value={option.kind}>{option.label}</option>)}</select><input value={newPlantName} onChange={(event) => { setNewPlantName(event.target.value); if (paletteFormError) setPaletteFormError("") }} placeholder="식재명 예: 라벤더" aria-invalid={Boolean(paletteFormError)} className={`h-9 w-full min-w-0 rounded-md border px-2.5 text-sm outline-none placeholder:text-xs placeholder:text-slate-400 focus:border-[#4f8738] ${paletteFormError ? "border-red-400 bg-red-50" : "border-slate-300"}`} />{paletteFormError && <p className="text-xs font-semibold text-red-600" role="alert">{paletteFormError}</p>}{newPlantKind === 'flower' && <div className="rounded-md border border-slate-200 bg-[#fbfbf8] p-2"><div className="mb-2 text-xs font-semibold text-slate-500">꽃 색상</div><div className="grid grid-cols-6 gap-1.5">{flowerColorOptions.map((color) => <button key={color.value} type="button" onClick={() => setNewFlowerColor(color.value)} title={color.name} className={`h-7 rounded-md border shadow-sm ${newFlowerColor === color.value ? 'border-slate-900 ring-2 ring-slate-300' : 'border-white'}`} style={{ backgroundColor: color.value }} aria-label={`${color.name} 꽃 색상 선택`} />)}</div></div>}<input value={newPlantLabel} onChange={(event) => { setNewPlantLabel(event.target.value); if (paletteFormError) setPaletteFormError("") }} placeholder="학명/메모 선택" className="h-9 w-full min-w-0 rounded-md border border-slate-300 px-2.5 text-sm outline-none placeholder:text-xs placeholder:text-slate-400 focus:border-[#4f8738]" /><button type="button" onClick={addTemplateToPalette} className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#4f8738] px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3f6f2d]"><Plus size={16} />{editingTemplateId ? "팔레트 수정" : "팔레트 등록"}</button>{editingTemplateId && <button type="button" onClick={resetPaletteForm} className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">수정 취소</button>}</div>}</div><div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <section className="flex min-h-0 flex-1 flex-col px-4 py-3 lg:overflow-hidden"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold uppercase tracking-normal text-slate-500">식재 팔레트</h2><Sprout size={18} className="text-[#4f8738]" /></div><div className="mb-3 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"><button type="button" onClick={() => canEditSelectedPlan && setIsPaletteFormOpen((open) => !open)} disabled={!canEditSelectedPlan} className="flex h-11 w-full items-center justify-between gap-3 px-3 text-left text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"><span>{editingTemplateId ? "식재 타입 수정" : "식재 타입 등록"}</span><span className="rounded-sm bg-[#edf6e7] px-2 py-1 text-[11px] font-semibold text-[#4f8738]">{isPaletteFormOpen ? "닫기" : "열기"}</span></button>{isPaletteFormOpen && <div className="grid gap-2 border-t border-slate-100 p-3"><select value={newPlantKind} onChange={(event) => setNewPlantKind(event.target.value as PlantKind)} className="h-9 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[#4f8738]">{kindOptions.map((option) => <option key={option.kind} value={option.kind}>{option.label}</option>)}</select><input value={newPlantName} onChange={(event) => { setNewPlantName(event.target.value); if (paletteFormError) setPaletteFormError("") }} placeholder="식재명 예: 라벤더" aria-invalid={Boolean(paletteFormError)} className={`h-9 w-full min-w-0 rounded-md border px-2.5 text-sm outline-none placeholder:text-xs placeholder:text-slate-400 focus:border-[#4f8738] ${paletteFormError ? "border-red-400 bg-red-50" : "border-slate-300"}`} />{paletteFormError && <p className="text-xs font-semibold text-red-600" role="alert">{paletteFormError}</p>}{newPlantKind === 'flower' && <div className="rounded-md border border-slate-200 bg-[#fbfbf8] p-2"><div className="mb-2 text-xs font-semibold text-slate-500">꽃 색상</div><div className="grid grid-cols-6 gap-1.5">{flowerColorOptions.map((color) => <button key={color.value} type="button" onClick={() => setNewFlowerColor(color.value)} title={color.name} className={`h-7 rounded-md border shadow-sm ${newFlowerColor === color.value ? 'border-slate-900 ring-2 ring-slate-300' : 'border-white'}`} style={{ backgroundColor: color.value }} aria-label={`${color.name} 꽃 색상 선택`} />)}</div></div>}<input value={newPlantLabel} onChange={(event) => { setNewPlantLabel(event.target.value); if (paletteFormError) setPaletteFormError("") }} placeholder="학명/메모 선택" className="h-9 w-full min-w-0 rounded-md border border-slate-300 px-2.5 text-sm outline-none placeholder:text-xs placeholder:text-slate-400 focus:border-[#4f8738]" /><button type="button" onClick={addTemplateToPalette} className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#4f8738] px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3f6f2d]"><Plus size={16} />{editingTemplateId ? "팔레트 수정" : "팔레트 등록"}</button>{editingTemplateId && <button type="button" onClick={resetPaletteForm} className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">수정 취소</button>}</div>}</div><div className="min-h-0 flex-1 overflow-y-auto pr-1">
   {kindOptions.map((group) => {
     const groupTemplates = selectedPlan.palette.filter((template) => template.category === group.category)
 
@@ -431,7 +565,7 @@ function App() {
                   draggable
                   onClick={() => addPlant(template)}
                   onDragStart={(event) => event.dataTransfer.setData('template-id', template.id)}
-                  className="flex w-full items-center gap-2 text-left"
+                  className="flex w-full items-center gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <div className="grid h-10 w-10 shrink-0 place-items-center">
                     <PlantSymbol plant={{ ...template, size: 32 }} />
@@ -475,13 +609,15 @@ function App() {
 </div></section>
       </aside>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-[74px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#fbfbf8] px-4 py-3 md:px-6"><label className="group flex min-w-[240px] flex-1 cursor-text items-center gap-2 rounded-md border border-transparent px-2 py-1.5 transition hover:border-[#9fbd86] hover:bg-white/70 focus-within:border-[#4f8738] focus-within:bg-white focus-within:shadow-sm"><span className="sr-only">조감도 제목</span><input value={selectedPlan.title} onChange={(event) => updateSelectedPlan({ title: event.target.value })} className="min-w-0 flex-1 bg-transparent text-2xl font-semibold tracking-normal outline-none" aria-label="조감도 제목" /><Pencil size={16} className="shrink-0 text-slate-400 transition group-hover:text-[#4f8738]" aria-hidden="true" /></label><div className="flex flex-wrap items-center gap-2">{darkModeToggle}<button type="button" onClick={exportPlanImage} disabled={isExporting} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d] disabled:cursor-wait disabled:opacity-70`}><Download size={17} />{isExporting ? "내보내는 중" : "이미지 내보내기"}</button><label className={`${actionButtonClass} cursor-pointer bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><ImagePlus size={17} />도면 업로드<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="sr-only" /></label></div></header>
+        <header className="flex h-[74px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#fbfbf8] px-4 py-3 md:px-6"><label className="group flex min-w-[240px] flex-1 cursor-text items-center gap-2 rounded-md border border-transparent px-2 py-1.5 transition hover:border-[#9fbd86] hover:bg-white/70 focus-within:border-[#4f8738] focus-within:bg-white focus-within:shadow-sm"><span className="sr-only">조감도 제목</span><input value={selectedPlan.title} onChange={(event) => updateSelectedPlan({ title: event.target.value })} disabled={!canEditSelectedPlan} className="min-w-0 flex-1 bg-transparent text-2xl font-semibold tracking-normal outline-none disabled:cursor-not-allowed" aria-label="조감도 제목" /><Pencil size={16} className="shrink-0 text-slate-400 transition group-hover:text-[#4f8738]" aria-hidden="true" /></label><div className="flex flex-wrap items-center gap-2">{authControls}<span className="rounded-md bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">{selectedPlanRole === 'owner' ? '소유자' : selectedPlanRole === 'editor' ? '수정가능' : '읽기전용'}</span>{darkModeToggle}<button type="button" onClick={exportPlanImage} disabled={isExporting} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d] disabled:cursor-wait disabled:opacity-70`}><Download size={17} />{isExporting ? "내보내는 중" : "이미지 내보내기"}</button>{canEditSelectedPlan && <label className={`${actionButtonClass} cursor-pointer bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><ImagePlus size={17} />도면 업로드<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="sr-only" /></label>}</div></header>
+        {authError && <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{authError}</div>}
+        {!canEditSelectedPlan && <div className="mx-4 mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">읽기전용 권한입니다. 조감도 확인과 이미지 내보내기만 사용할 수 있습니다.</div>}
         {exportError && <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{exportError}</div>}
         <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto p-0 md:p-2 lg:p-2">
           <div className={`transition duration-200 ${shouldShowOrientationLock ? 'pointer-events-none opacity-25 blur-[1px]' : ''}`}>
             <div ref={boardFrameRef} className="mx-auto w-full max-w-[1120px] rounded-md bg-white p-1.5 shadow-[0_18px_48px_rgba(47,55,43,0.12)] md:p-2">
               <div className="relative overflow-hidden" style={{ width: BOARD_WIDTH * boardScale, maxWidth: '100%', height: BOARD_HEIGHT * boardScale }}>
-                <div ref={canvasRef} data-export-board="true" onClick={() => setSelectedPlantId(null)} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop} className="relative origin-top-left overflow-visible border border-[#d8ded4] bg-[#f7f7f2]" style={{ width: BOARD_WIDTH, height: BOARD_HEIGHT, transform: `scale(${boardScale})`, backgroundImage: selectedPlan.backgroundUrl ? `linear-gradient(rgba(255,255,255,${backgroundOverlay}), rgba(255,255,255,${backgroundOverlay})), url(${selectedPlan.backgroundUrl})` : undefined, backgroundPosition: 'center', backgroundSize: selectedPlan.backgroundUrl ? 'contain' : undefined, backgroundRepeat: selectedPlan.backgroundUrl ? 'no-repeat' : undefined }}>{!selectedPlan.backgroundUrl && <PlanBase fade={selectedPlan.backgroundFade ?? 62} />}{!selectedPlan.backgroundUrl && selectedPlan.plants.length === 0 && <div className="pointer-events-none absolute left-1/2 top-[52%] -translate-x-1/2 rounded-md border border-dashed px-5 py-4 text-center shadow-sm backdrop-blur-sm" style={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(148, 163, 184, 0.6)' }}><Layers className="mx-auto mb-2 text-[#4f8738]" size={26} /><p className="font-semibold" style={{ color: '#1e293b' }}>팔레트에서 식물을 얹어보세요</p><p className="mt-1 text-sm" style={{ color: '#64748b' }}>등록한 식재를 탭하거나 드래그해서 배치할 수 있습니다.</p></div>}{selectedPlan.plants.map((plant) => <PlacedPlant key={plant.instanceId} plant={plant} selected={selectedPlantId === plant.instanceId} plantIntensity={selectedPlan.plantIntensity ?? 125} boardScale={boardScale} onSelect={() => setSelectedPlantId(plant.instanceId)} onMove={(updates) => updatePlant(plant.instanceId, updates)} onResize={(updates) => updatePlant(plant.instanceId, updates)} />)}</div>
+                <div ref={canvasRef} data-export-board="true" onClick={() => setSelectedPlantId(null)} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop} className="relative origin-top-left overflow-visible border border-[#d8ded4] bg-[#f7f7f2]" style={{ width: BOARD_WIDTH, height: BOARD_HEIGHT, transform: `scale(${boardScale})`, backgroundImage: selectedPlan.backgroundUrl ? `linear-gradient(rgba(255,255,255,${backgroundOverlay}), rgba(255,255,255,${backgroundOverlay})), url(${selectedPlan.backgroundUrl})` : undefined, backgroundPosition: 'center', backgroundSize: selectedPlan.backgroundUrl ? 'contain' : undefined, backgroundRepeat: selectedPlan.backgroundUrl ? 'no-repeat' : undefined }}>{!selectedPlan.backgroundUrl && <PlanBase fade={selectedPlan.backgroundFade ?? 62} />}{!selectedPlan.backgroundUrl && selectedPlan.plants.length === 0 && <div className="pointer-events-none absolute left-1/2 top-[52%] -translate-x-1/2 rounded-md border border-dashed px-5 py-4 text-center shadow-sm backdrop-blur-sm" style={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(148, 163, 184, 0.6)' }}><Layers className="mx-auto mb-2 text-[#4f8738]" size={26} /><p className="font-semibold" style={{ color: '#1e293b' }}>팔레트에서 식물을 얹어보세요</p><p className="mt-1 text-sm" style={{ color: '#64748b' }}>등록한 식재를 탭하거나 드래그해서 배치할 수 있습니다.</p></div>}{selectedPlan.plants.map((plant) => <PlacedPlant key={plant.instanceId} plant={plant} selected={selectedPlantId === plant.instanceId} plantIntensity={selectedPlan.plantIntensity ?? 125} boardScale={boardScale} readOnly={!canEditSelectedPlan} onSelect={() => setSelectedPlantId(plant.instanceId)} onMove={(updates) => updatePlant(plant.instanceId, updates)} onResize={(updates) => updatePlant(plant.instanceId, updates)} />)}</div>
               </div>
             </div>
           </div>
@@ -499,6 +635,7 @@ function App() {
 
       <aside className={rightPanelClass}><button type="button" onClick={() => setIsInspectorCollapsed(false)} className="landi-panel-toggle h-12 w-full items-center justify-between rounded-none border-0 border-t border-slate-200 bg-[#fbfbf8] px-4 text-slate-700 transition hover:bg-white lg:mx-auto lg:mt-3 lg:h-10 lg:w-10 lg:justify-center lg:rounded-md lg:border lg:bg-white lg:px-0 lg:shadow-sm" aria-label="선택 도구 펼치기"><span className="inline-flex items-center gap-2 text-sm font-semibold lg:hidden"><MousePointer2 size={17} className="text-[#4f8738]" />선택 도구</span><ChevronUp size={18} className="lg:hidden" /><PanelLeftOpen size={18} className="hidden lg:block" /></button>
         <div className="border-b border-slate-200 px-5 py-4 md:px-6 md:py-5"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-sm font-semibold text-slate-500"><MousePointer2 size={17} />선택 도구</div><button type="button" onClick={() => setIsInspectorCollapsed(true)} className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label="선택 도구 접기"><ChevronDown size={18} className="lg:hidden" /><PanelRightClose size={18} className="hidden lg:block" /></button></div><div className="mt-4 rounded-md bg-white p-4 shadow-sm ring-1 ring-slate-200">{selectedPlant ? <><div className="flex items-center justify-between"><div><p className="font-semibold text-slate-900">{selectedPlant.name}</p><p className="botanical-name text-xs text-slate-500">{selectedPlant.label}</p><p className="text-sm text-slate-500">{selectedPlant.category}</p></div><button type="button" onClick={deleteSelectedPlant} className="grid h-9 w-9 place-items-center rounded-md text-red-600 transition hover:bg-red-50" aria-label="선택 식물 삭제"><Trash2 size={18} /></button></div><div className="mt-4 flex items-center gap-2"><button type="button" onClick={() => updatePlant(selectedPlant.instanceId, { size: Math.max(28, selectedPlant.size - 8) })} className="grid h-9 w-9 place-items-center rounded-md bg-white text-slate-700 shadow-sm ring-1 ring-slate-200" aria-label="선택 식물 축소"><Minus size={18} /></button><div className="flex-1 rounded-md bg-[#f3f5ef] px-3 py-2 text-center text-sm font-semibold text-slate-600 ring-1 ring-slate-200">{Math.round(selectedPlant.size)}px</div><button type="button" onClick={() => updatePlant(selectedPlant.instanceId, { size: Math.min(180, selectedPlant.size + 8) })} className="grid h-9 w-9 place-items-center rounded-md bg-white text-slate-700 shadow-sm ring-1 ring-slate-200" aria-label="선택 식물 확대"><Plus size={18} /></button></div></> : <p className="text-sm leading-6 text-slate-500">배치된 식물을 선택하면 삭제 도구와 모서리 크기 조절 핸들이 표시됩니다.</p>}</div></div>
+        <section className="border-b border-slate-200 px-4 py-3 md:px-5"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-600">멤버 초대</h2><span className="text-[11px] font-semibold text-[#4f8738]">Share</span></div><div className="grid gap-2 rounded-md bg-white p-3 shadow-sm ring-1 ring-slate-200">{authUser ? <>{canManageSelectedPlan ? <><input value={inviteEmail} onChange={(event) => { setInviteEmail(event.target.value); if (inviteError) setInviteError('') }} placeholder="초대할 이메일" className="h-9 w-full min-w-0 rounded-md border border-slate-300 px-2.5 text-sm outline-none placeholder:text-xs placeholder:text-slate-400 focus:border-[#4f8738]" /><div className="grid grid-cols-[1fr_auto] gap-2"><select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as Exclude<PlanRole, 'owner'>)} className="h-9 rounded-md border border-slate-300 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[#4f8738]"><option value="viewer">읽기전용</option><option value="editor">수정가능</option></select><button type="button" onClick={inviteMember} className="inline-flex h-9 items-center justify-center rounded-md bg-[#4f8738] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#3f6f2d]">초대</button></div>{inviteError && <p className="text-xs font-semibold text-red-600" role="alert">{inviteError}</p>}</> : <p className="text-sm leading-6 text-slate-500">소유자만 멤버를 초대하고 권한을 변경할 수 있습니다.</p>}</> : <p className="text-sm leading-6 text-slate-500">Google 로그인 후 조감도를 공유할 수 있습니다.</p>}{(selectedPlan.members ?? []).length > 0 && <div className="grid gap-2 border-t border-slate-100 pt-2">{(selectedPlan.members ?? []).map((member) => <div key={member.email} className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-md bg-[#f8faf7] px-2 py-2"><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-700">{member.email}</p><p className="text-xs text-slate-500">{member.role === 'editor' ? '수정가능' : '읽기전용'}</p></div>{canManageSelectedPlan && <div className="flex items-center gap-1"><select value={member.role} onChange={(event) => updateMemberRole(member.email, event.target.value as Exclude<PlanRole, 'owner'>)} className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600"><option value="viewer">읽기</option><option value="editor">수정</option></select><button type="button" onClick={() => removeMember(member.email)} className="grid h-8 w-8 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label={`${member.email} 초대 제거`}><Trash2 size={14} /></button></div>}</div>)}</div>}</div></section>
         <section className="border-b border-slate-200 px-4 py-3 md:px-5"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-600">표현 설정</h2><span className="text-[11px] font-semibold text-[#4f8738]">View</span></div><div className="grid gap-3 rounded-md bg-white p-3 shadow-sm ring-1 ring-slate-200"><label className="grid gap-1.5 text-xs font-semibold text-slate-500"><span className="flex items-center justify-between"><span>도면 밝기</span><span>{selectedPlan.backgroundFade ?? 62}%</span></span><input type="range" min="0" max="86" value={selectedPlan.backgroundFade ?? 62} onChange={(event) => updateSelectedPlan({ backgroundFade: Number(event.target.value) })} className="landi-range" /></label><label className="grid gap-1.5 text-xs font-semibold text-slate-500"><span className="flex items-center justify-between"><span>식재 진하기</span><span>{selectedPlan.plantIntensity ?? 125}%</span></span><input type="range" min="70" max="155" value={selectedPlan.plantIntensity ?? 125} onChange={(event) => updateSelectedPlan({ plantIntensity: Number(event.target.value) })} className="landi-range" /></label></div></section>
         <section className="flex min-h-0 flex-1 flex-col px-5 py-4 md:px-6 md:py-5"><div className="mb-4 flex shrink-0 items-end justify-between"><div><h2 className="text-lg font-semibold tracking-normal">수량 집계</h2><p className="text-sm text-slate-500">Plant schedule</p></div><span className="rounded-md bg-[#edf6e7] px-2.5 py-1 text-sm font-semibold text-[#4f8738]">총 {selectedPlan.plants.length}</span></div><div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto pr-1 md:grid-cols-5 lg:block lg:space-y-2">{inventory.map((item) => <div key={item.id} className="flex items-center justify-between rounded-md border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-center gap-3"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.colors.primary }} /><div><p className="text-sm font-semibold text-slate-800">{item.name}</p><p className="botanical-name text-xs text-slate-500">{item.label}</p></div></div><span className="text-lg font-semibold text-slate-900">{item.count}</span></div>)}</div></section>
       </aside>
@@ -507,5 +644,26 @@ function App() {
 }
 
 export default App
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

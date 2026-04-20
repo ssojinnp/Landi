@@ -2,6 +2,7 @@
 export type PlantKind = 'evergreen' | 'deciduous' | 'shrub' | 'groundcover' | 'flower'
 export type PlantType = 'tree' | 'shrub' | 'flower' | 'grass'
 export type ViewMode = 'list' | 'preview' | 'edit'
+export type PlanRole = 'owner' | 'editor' | 'viewer'
 
 export type PlantColors = {
   primary: string
@@ -27,6 +28,14 @@ export interface Plant extends PlantTemplate {
   y: number
 }
 
+export interface PlanMember {
+  id: string
+  email: string
+  role: Exclude<PlanRole, 'owner'>
+  invitedAt: string
+  invitedBy: string
+}
+
 export interface Plan {
   id: string
   title: string
@@ -36,6 +45,10 @@ export interface Plan {
   plants: Plant[]
   backgroundFade?: number
   plantIntensity?: number
+  ownerId?: string
+  ownerEmail?: string
+  accessEmails?: string[]
+  members?: PlanMember[]
 }
 
 export interface PlantKindOption {
@@ -45,3 +58,4 @@ export interface PlantKindOption {
   size: number
   colors: PlantColors
 }
+
