@@ -48,7 +48,7 @@ function ResizeHandle({ anchor, onResizeStart }: { anchor: ResizeAnchor; onResiz
   return <button type="button" onPointerDown={(event) => onResizeStart(anchor, event)} className={`resize-handle export-hidden absolute h-3 w-3 touch-none rounded-[2px] border shadow-sm ${positionMap[anchor]}`} style={{ backgroundColor: '#2563eb', borderColor: '#ffffff' }} aria-label={`식재 ${anchor} 방향 크기 조절`} />
 }
 
-function PlacedPlant({ plant, selected, plantIntensity, onSelect, onMove, onResize }: { plant: Plant; selected: boolean; plantIntensity: number; onSelect: () => void; onMove: (updates: Pick<Plant, 'x' | 'y'>) => void; onResize: (updates: Pick<Plant, 'x' | 'y' | 'size'>) => void }) {
+function PlacedPlant({ plant, selected, plantIntensity, boardScale, onSelect, onMove, onResize }: { plant: Plant; selected: boolean; plantIntensity: number; boardScale: number; onSelect: () => void; onMove: (updates: Pick<Plant, 'x' | 'y'>) => void; onResize: (updates: Pick<Plant, 'x' | 'y' | 'size'>) => void }) {
   const nodeRef = useRef<HTMLDivElement>(null)
   const handles: ResizeAnchor[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
   const symbolOpacity = Math.min(1, Math.max(0.55, plantIntensity / 100))
@@ -64,8 +64,8 @@ function PlacedPlant({ plant, selected, plantIntensity, onSelect, onMove, onResi
     const startPlantY = plant.y
 
     const move = (moveEvent: PointerEvent) => {
-      const deltaX = moveEvent.clientX - startX
-      const deltaY = moveEvent.clientY - startY
+      const deltaX = (moveEvent.clientX - startX) / boardScale
+      const deltaY = (moveEvent.clientY - startY) / boardScale
       const horizontalDelta = anchor.includes('e') ? deltaX : anchor.includes('w') ? -deltaX : 0
       const verticalDelta = anchor.includes('s') ? deltaY : anchor.includes('n') ? -deltaY : 0
       const delta = anchor.length === 2 ? Math.abs(horizontalDelta) > Math.abs(verticalDelta) ? horizontalDelta : verticalDelta : horizontalDelta || verticalDelta
@@ -87,7 +87,7 @@ function PlacedPlant({ plant, selected, plantIntensity, onSelect, onMove, onResi
   }
 
   return (
-    <Draggable nodeRef={nodeRef} position={{ x: plant.x, y: plant.y }} bounds="parent" cancel=".resize-handle" onStop={(_: DraggableEvent, data: DraggableData) => onMove({ x: data.x, y: data.y })}>
+    <Draggable nodeRef={nodeRef} position={{ x: plant.x, y: plant.y }} bounds="parent" cancel=".resize-handle" scale={boardScale} onStop={(_: DraggableEvent, data: DraggableData) => onMove({ x: data.x, y: data.y })}>
       <div ref={nodeRef} onClick={(event) => { event.stopPropagation(); onSelect() }} className="group absolute cursor-move touch-none select-none" style={{ width: plant.size + 56, height: plant.size + 54, filter: 'drop-shadow(0 24px 20px rgba(12, 26, 12, 0.42)) drop-shadow(8px 12px 10px rgba(42, 54, 36, 0.28))' }}>
         <div className={`absolute left-4 top-3 ${selected ? 'rounded-md outline outline-1 outline-offset-1' : ''}`} style={{ opacity: selected ? Math.min(0.92, symbolOpacity) : symbolOpacity, filter: symbolFilter, outlineColor: selected ? '#2563eb' : undefined }}>
           <PlantSymbol plant={plant} />
@@ -147,12 +147,25 @@ function App() {
   const [paletteFormError, setPaletteFormError] = useState('')
   const [exportError, setExportError] = useState('')
   const [isExporting, setIsExporting] = useState(false)
+  const [boardScale, setBoardScale] = useState(1)
+  const boardFrameRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? plans[0]
   const selectedPlant = selectedPlan?.plants.find((plant) => plant.instanceId === selectedPlantId)
 
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(plans)), [plans])
+  useEffect(() => {
+    const frame = boardFrameRef.current
+    if (!frame) return
+
+    const updateScale = () => setBoardScale(Math.min(1, frame.clientWidth / BOARD_WIDTH))
+    updateScale()
+
+    const observer = new ResizeObserver(updateScale)
+    observer.observe(frame)
+    return () => observer.disconnect()
+  }, [mode])
 
   const updateSelectedPlan = (updates: Partial<Plan>) => {
     if (!selectedPlan) return
@@ -261,7 +274,7 @@ function App() {
     if (!selectedPlan) return
     const template = selectedPlan.palette.find((item) => item.id === event.dataTransfer.getData('template-id'))
     const canvasBounds = canvasRef.current?.getBoundingClientRect()
-    if (template && canvasBounds) addPlant(template, event.clientX - canvasBounds.left, event.clientY - canvasBounds.top)
+    if (template && canvasBounds) addPlant(template, (event.clientX - canvasBounds.left) / boardScale, (event.clientY - canvasBounds.top) / boardScale)
   }
   const exportPlanImage = async () => {
     if (!canvasRef.current || !selectedPlan || isExporting) return
@@ -444,7 +457,7 @@ function App() {
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex h-[74px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#fbfbf8] px-4 py-3 md:px-6"><label className="group flex min-w-[240px] flex-1 cursor-text items-center gap-2 rounded-md border border-transparent px-2 py-1.5 transition hover:border-[#9fbd86] hover:bg-white/70 focus-within:border-[#4f8738] focus-within:bg-white focus-within:shadow-sm"><span className="sr-only">조감도 제목</span><input value={selectedPlan.title} onChange={(event) => updateSelectedPlan({ title: event.target.value })} className="min-w-0 flex-1 bg-transparent text-2xl font-semibold tracking-normal outline-none" aria-label="조감도 제목" /><Pencil size={16} className="shrink-0 text-slate-400 transition group-hover:text-[#4f8738]" aria-hidden="true" /></label><div className="flex flex-wrap items-center gap-2">{darkModeToggle}<button type="button" onClick={exportPlanImage} disabled={isExporting} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d] disabled:cursor-wait disabled:opacity-70`}><Download size={17} />{isExporting ? "내보내는 중" : "이미지 내보내기"}</button><label className={`${actionButtonClass} cursor-pointer bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><ImagePlus size={17} />도면 업로드<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="sr-only" /></label></div></header>
         {exportError && <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{exportError}</div>}
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-0 md:p-2 lg:p-2"><div className="mx-auto w-[1120px] max-w-none rounded-md bg-white p-1.5 shadow-[0_18px_48px_rgba(47,55,43,0.12)] md:p-2 lg:max-w-full"><div ref={canvasRef} data-export-board="true" onClick={() => setSelectedPlantId(null)} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop} className="relative h-[640px] w-full overflow-visible border border-[#d8ded4] bg-[#f7f7f2]" style={{ backgroundImage: selectedPlan.backgroundUrl ? `linear-gradient(rgba(255,255,255,${backgroundOverlay}), rgba(255,255,255,${backgroundOverlay})), url(${selectedPlan.backgroundUrl})` : undefined, backgroundPosition: 'center', backgroundSize: selectedPlan.backgroundUrl ? 'contain' : undefined, backgroundRepeat: selectedPlan.backgroundUrl ? 'no-repeat' : undefined }}>{!selectedPlan.backgroundUrl && <PlanBase fade={selectedPlan.backgroundFade ?? 62} />}{!selectedPlan.backgroundUrl && selectedPlan.plants.length === 0 && <div className="pointer-events-none absolute left-1/2 top-[52%] -translate-x-1/2 rounded-md border border-dashed px-5 py-4 text-center shadow-sm backdrop-blur-sm" style={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(148, 163, 184, 0.6)' }}><Layers className="mx-auto mb-2 text-[#4f8738]" size={26} /><p className="font-semibold" style={{ color: '#1e293b' }}>팔레트에서 식물을 얹어보세요</p><p className="mt-1 text-sm" style={{ color: '#64748b' }}>등록한 식재를 탭하거나 드래그해서 배치할 수 있습니다.</p></div>}{selectedPlan.plants.map((plant) => <PlacedPlant key={plant.instanceId} plant={plant} selected={selectedPlantId === plant.instanceId} plantIntensity={selectedPlan.plantIntensity ?? 125} onSelect={() => setSelectedPlantId(plant.instanceId)} onMove={(updates) => updatePlant(plant.instanceId, updates)} onResize={(updates) => updatePlant(plant.instanceId, updates)} />)}</div></div></div>
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-0 md:p-2 lg:p-2"><div ref={boardFrameRef} className="mx-auto w-full max-w-[1120px] rounded-md bg-white p-1.5 shadow-[0_18px_48px_rgba(47,55,43,0.12)] md:p-2"><div className="relative overflow-visible" style={{ width: '100%', height: BOARD_HEIGHT * boardScale }}><div ref={canvasRef} data-export-board="true" onClick={() => setSelectedPlantId(null)} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop} className="relative origin-top-left overflow-visible border border-[#d8ded4] bg-[#f7f7f2]" style={{ width: BOARD_WIDTH, height: BOARD_HEIGHT, transform: `scale(${boardScale})`, backgroundImage: selectedPlan.backgroundUrl ? `linear-gradient(rgba(255,255,255,${backgroundOverlay}), rgba(255,255,255,${backgroundOverlay})), url(${selectedPlan.backgroundUrl})` : undefined, backgroundPosition: 'center', backgroundSize: selectedPlan.backgroundUrl ? 'contain' : undefined, backgroundRepeat: selectedPlan.backgroundUrl ? 'no-repeat' : undefined }}>{!selectedPlan.backgroundUrl && <PlanBase fade={selectedPlan.backgroundFade ?? 62} />}{!selectedPlan.backgroundUrl && selectedPlan.plants.length === 0 && <div className="pointer-events-none absolute left-1/2 top-[52%] -translate-x-1/2 rounded-md border border-dashed px-5 py-4 text-center shadow-sm backdrop-blur-sm" style={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(148, 163, 184, 0.6)' }}><Layers className="mx-auto mb-2 text-[#4f8738]" size={26} /><p className="font-semibold" style={{ color: '#1e293b' }}>팔레트에서 식물을 얹어보세요</p><p className="mt-1 text-sm" style={{ color: '#64748b' }}>등록한 식재를 탭하거나 드래그해서 배치할 수 있습니다.</p></div>}{selectedPlan.plants.map((plant) => <PlacedPlant key={plant.instanceId} plant={plant} selected={selectedPlantId === plant.instanceId} plantIntensity={selectedPlan.plantIntensity ?? 125} boardScale={boardScale} onSelect={() => setSelectedPlantId(plant.instanceId)} onMove={(updates) => updatePlant(plant.instanceId, updates)} onResize={(updates) => updatePlant(plant.instanceId, updates)} />)}</div></div></div></div>
       </section>
 
       <aside className="flex max-h-[34vh] min-h-0 w-full shrink-0 flex-col border-t border-slate-200 bg-[#fbfbf8] lg:h-screen lg:max-h-none lg:w-[260px] lg:border-l lg:border-t-0 xl:w-[286px]">
@@ -457,64 +470,4 @@ function App() {
 }
 
 export default App
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
