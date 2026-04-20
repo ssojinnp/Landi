@@ -18,7 +18,14 @@
 
 html,
 #root {
-  height: 100vh;
+  min-height: 100vh;
+}
+
+@media (min-width: 1024px) {
+  html,
+  #root {
+    height: 100vh;
+  }
 }
 
 body {
@@ -216,5 +223,41 @@ input::placeholder {
 .landi-exporting .bg-\[\#4f8738\] {
   background-color: #4f8738 !important;
 }
+.landi-panel-toggle {
+  display: none;
+}
+
+.landi-editor-panel.is-collapsed {
+  overflow: hidden;
+}
+
+.landi-editor-panel.is-collapsed > :not(.landi-panel-toggle) {
+  display: none !important;
+}
+
+.landi-editor-panel.is-collapsed > .landi-panel-toggle {
+  display: flex;
+}
+
+@media (max-width: 1023px) {
+  .landi-editor-panel.is-collapsed {
+    min-height: 48px;
+    max-height: 48px;
+    width: 100%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .landi-editor-panel.is-collapsed {
+    align-items: center;
+    padding-top: 12px;
+  }
+
+  .landi-editor-panel.is-collapsed > .landi-panel-toggle {
+    display: grid;
+  }
+}
+
+
 
 
