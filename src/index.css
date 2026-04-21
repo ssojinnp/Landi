@@ -71,6 +71,13 @@ input::placeholder {
   font-weight: 500;
 }
 
+.landi-compact-control {
+  min-height: 32px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+}
+
 .landi-panel-title {
   font-size: 13px;
   font-weight: 700;

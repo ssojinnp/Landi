@@ -34,6 +34,8 @@ export interface PlanMember {
   role: Exclude<PlanRole, 'owner'>
   invitedAt: string
   invitedBy: string
+  status?: 'invited' | 'joined'
+  joinedAt?: string
 }
 
 export interface Plan {

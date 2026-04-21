@@ -69,9 +69,18 @@ Deno.serve(async (request) => {
 
   const invitedBy = userEmail || plan.owner_email
   const currentMembers = Array.isArray(plan.members) ? plan.members : []
+  const existingMember = currentMembers.find((member) => String(member.email).toLowerCase() === email)
   const nextMembers = [
     ...currentMembers.filter((member) => String(member.email).toLowerCase() !== email),
-    { id: `member-${crypto.randomUUID()}`, email, role, invitedAt: new Date().toISOString(), invitedBy },
+    {
+      id: existingMember?.id ?? `member-${crypto.randomUUID()}`,
+      email,
+      role,
+      invitedAt: existingMember?.invitedAt ?? new Date().toISOString(),
+      invitedBy: existingMember?.invitedBy ?? invitedBy,
+      status: existingMember?.status ?? 'invited',
+      joinedAt: existingMember?.joinedAt,
+    },
   ]
   const nextAccessEmails = Array.from(new Set([...(plan.access_emails ?? []), plan.owner_email, email].map((item) => String(item).toLowerCase()).filter(Boolean)))
   const nextData = {
