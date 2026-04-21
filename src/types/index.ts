@@ -48,6 +48,7 @@ export interface Plan {
   backgroundFade?: number
   backgroundSaturation?: number
   plantIntensity?: number
+  showPlantLabels?: boolean
   ownerId?: string
   ownerEmail?: string
   accessEmails?: string[]
