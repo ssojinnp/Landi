@@ -250,6 +250,17 @@ input::placeholder {
 .landi-exporting .bg-\[\#4f8738\] {
   background-color: #4f8738 !important;
 }
+
+.landi-plant-label-text {
+  display: inline-block;
+  line-height: 18px;
+}
+
+.landi-exporting .landi-plant-label-text {
+  line-height: 10px !important;
+  transform: translateY(-5px);
+}
+
 .landi-editor-panel.is-collapsed {
   overflow: hidden;
 }
