@@ -35,6 +35,7 @@ function createTemplate(kind: PlantKind, name: string, label = '', flowerAccent 
 }
 type ResizeAnchor = 'n' | 'e' | 's' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 type InspectorPanel = 'share' | 'view' | 'schedule'
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function ResizeHandle({ anchor, onResizeStart }: { anchor: ResizeAnchor; onResizeStart: (anchor: ResizeAnchor, event: ReactPointerEvent<HTMLButtonElement>) => void }) {
   const positionMap: Record<ResizeAnchor, string> = {
@@ -303,7 +304,8 @@ function App() {
   const inviteMember = async () => {
     if (!selectedPlan || !authUser || !canManageSelectedPlan) return
     const email = inviteEmail.trim().toLowerCase()
-    if (!email || !email.includes('@')) {
+    setInviteStatus('')
+    if (!email || !emailPattern.test(email)) {
       setInviteError('초대할 이메일을 입력해주세요.')
       return
     }
@@ -312,8 +314,10 @@ function App() {
       return
     }
 
+    const currentMembers = selectedPlan.members ?? []
+    const existingMember = currentMembers.find((member) => member.email.toLowerCase() === email)
     const nextMembers = [
-      ...(selectedPlan.members ?? []).filter((member) => member.email.toLowerCase() !== email),
+      ...currentMembers.filter((member) => member.email.toLowerCase() !== email),
       { id: `member-${crypto.randomUUID()}`, email, role: inviteRole, invitedAt: new Date().toISOString(), invitedBy: authUser.email },
     ]
     const accessEmails = Array.from(new Set([...(selectedPlan.accessEmails ?? []), selectedPlan.ownerEmail ?? authUser.email, email].map((item) => item.toLowerCase()).filter(Boolean)))
@@ -323,7 +327,7 @@ function App() {
     updateSelectedPlan({ members: nextMembers, accessEmails })
 
     if (!supabase) {
-      setInviteStatus('권한을 추가했습니다. Supabase 설정 후에는 초대 메일도 발송됩니다.')
+      setInviteStatus(existingMember ? '멤버 권한을 업데이트했습니다. Supabase 설정 후에는 메일도 발송됩니다.' : '권한을 추가했습니다. Supabase 설정 후에는 초대 메일도 발송됩니다.')
       return
     }
 
@@ -371,7 +375,7 @@ function App() {
       setInviteStatus(`권한은 추가했습니다. 메일 발송은 실패했지만 대상자는 로그인 후 접근할 수 있습니다.${detail}`)
       return
     }
-    setInviteStatus(data?.emailKind === 'signin' ? '권한을 추가하고 로그인 안내 메일을 발송했습니다.' : '초대 메일을 발송했습니다.')
+    setInviteStatus(data?.emailKind === 'signin' ? '권한을 추가하고 로그인 안내 메일을 발송했습니다.' : existingMember ? '멤버 권한을 업데이트하고 안내 메일을 발송했습니다.' : '초대 메일을 발송했습니다.')
   }
 
   const persistMemberAccess = async (nextPlan: Plan, successMessage: string) => {
@@ -394,7 +398,8 @@ function App() {
 
   const updateMemberRole = async (email: string, role: Exclude<PlanRole, 'owner'>) => {
     if (!selectedPlan || !canManageSelectedPlan || !authUser) return
-    const nextMembers = (selectedPlan.members ?? []).map((member) => member.email === email ? { ...member, role } : member)
+    const normalizedEmail = email.toLowerCase()
+    const nextMembers = (selectedPlan.members ?? []).map((member) => member.email.toLowerCase() === normalizedEmail ? { ...member, role } : member)
     const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, updatedAt: new Date().toISOString() }, authUser)
     updateSelectedPlan({ members: nextMembers })
     await persistMemberAccess(nextPlan, '멤버 권한을 업데이트했습니다.')
@@ -402,8 +407,9 @@ function App() {
 
   const removeMember = async (email: string) => {
     if (!selectedPlan || !canManageSelectedPlan || !authUser) return
-    const nextMembers = (selectedPlan.members ?? []).filter((member) => member.email !== email)
-    const nextAccessEmails = (selectedPlan.accessEmails ?? []).filter((item) => item.toLowerCase() !== email.toLowerCase())
+    const normalizedEmail = email.toLowerCase()
+    const nextMembers = (selectedPlan.members ?? []).filter((member) => member.email.toLowerCase() !== normalizedEmail)
+    const nextAccessEmails = (selectedPlan.accessEmails ?? []).filter((item) => item.toLowerCase() !== normalizedEmail)
     const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, accessEmails: nextAccessEmails, updatedAt: new Date().toISOString() }, authUser)
     updateSelectedPlan({ members: nextMembers, accessEmails: nextAccessEmails })
     await persistMemberAccess(nextPlan, '멤버 접근 권한을 삭제했습니다.')
@@ -734,7 +740,7 @@ function App() {
         </nav>
         {activeToolPanel && <section className="min-h-0 flex-1 overflow-y-auto px-4 py-3 md:px-5 lg:w-[286px] lg:flex-none">
           <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-slate-700">{toolPanelLabel}</h2><button type="button" onClick={() => setActiveToolPanel(null)} className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" aria-label="패널 닫기"><ChevronDown size={17} className="lg:hidden" /><PanelRightClose size={17} className="hidden lg:block" /></button></div>
-          {activeToolPanel === 'share' && <div className="grid gap-3"><div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold text-slate-900">프로젝트 공유</p><p className="mt-1 truncate text-xs text-slate-500">소유자 {ownerLabel}</p></div><span className="shrink-0 rounded-md bg-[#edf6e7] px-2 py-1 text-xs font-semibold text-[#4f8738]">{roleLabel}</span></div></div>{authUser ? <>{canManageSelectedPlan ? <div className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 shadow-sm"><input value={inviteEmail} onChange={(event) => { setInviteEmail(event.target.value); if (inviteError) setInviteError(''); if (inviteStatus) setInviteStatus('') }} placeholder="이메일로 초대" className="h-9 w-full min-w-0 rounded-md border border-slate-300 px-2.5 text-sm outline-none placeholder:text-xs placeholder:text-slate-400 focus:border-[#4f8738]" /><div className="grid grid-cols-[1fr_auto] gap-2"><select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as Exclude<PlanRole, 'owner'>)} className="h-9 rounded-md border border-slate-300 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[#4f8738]"><option value="viewer">읽기전용</option><option value="editor">수정가능</option></select><button type="button" onClick={inviteMember} disabled={isInviting} className="inline-flex h-9 items-center justify-center rounded-md bg-[#4f8738] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#3f6f2d] disabled:cursor-wait disabled:opacity-70">{isInviting ? '발송중' : '초대'}</button></div>{inviteError && <p className="text-xs font-semibold text-red-600" role="alert">{inviteError}</p>}{inviteStatus && <p className="text-xs font-semibold text-[#4f8738]" role="status">{inviteStatus}</p>}</div> : <div className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-500 shadow-sm">초대와 권한 변경은 소유자만 할 수 있습니다.</div>}</> : <div className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-500 shadow-sm">Google 로그인 후 조감도를 공유할 수 있습니다.</div>}<div className="grid gap-2"><div className="flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-normal text-slate-500">멤버</h3><span className="text-xs font-semibold text-slate-400">{(selectedPlan.members ?? []).length}</span></div>{(selectedPlan.members ?? []).length > 0 ? (selectedPlan.members ?? []).map((member) => <div key={member.email} className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm"><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-700">{member.email}</p><p className="text-xs text-slate-500">{member.role === 'editor' ? '수정가능' : '읽기전용'}</p></div>{canManageSelectedPlan && <div className="flex items-center gap-1"><select value={member.role} onChange={(event) => updateMemberRole(member.email, event.target.value as Exclude<PlanRole, 'owner'>)} className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600"><option value="viewer">읽기</option><option value="editor">수정</option></select><button type="button" onClick={() => removeMember(member.email)} className="grid h-8 w-8 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label={`${member.email} 초대 제거`}><Trash2 size={14} /></button></div>}</div>) : <div className="rounded-md border border-dashed border-slate-200 bg-white/70 px-3 py-4 text-center text-xs text-slate-400">아직 초대된 멤버가 없습니다.</div>}</div></div>}
+          {activeToolPanel === 'share' && <div className="grid gap-3"><div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold text-slate-900">프로젝트 공유</p><p className="mt-1 truncate text-xs text-slate-500">소유자 {ownerLabel}</p></div><span className="shrink-0 rounded-md bg-[#edf6e7] px-2 py-1 text-xs font-semibold text-[#4f8738]">{roleLabel}</span></div></div>{authUser ? <>{canManageSelectedPlan ? <div className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 shadow-sm"><input value={inviteEmail} onChange={(event) => { setInviteEmail(event.target.value); if (inviteError) setInviteError(''); if (inviteStatus) setInviteStatus('') }} placeholder="이메일로 초대" className="landi-form-control h-9 w-full min-w-0 rounded-md border border-slate-300 px-2.5 outline-none focus:border-[#4f8738]" /><div className="grid grid-cols-[1fr_auto] gap-2"><select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as Exclude<PlanRole, 'owner'>)} className="landi-form-control h-9 rounded-md border border-slate-300 bg-white px-2.5 text-slate-700 outline-none focus:border-[#4f8738]"><option value="viewer">읽기전용</option><option value="editor">수정가능</option></select><button type="button" onClick={inviteMember} disabled={isInviting} className="inline-flex h-9 items-center justify-center rounded-md bg-[#4f8738] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#3f6f2d] disabled:cursor-wait disabled:opacity-70">{isInviting ? '발송중' : '초대'}</button></div>{inviteError && <p className="text-xs font-semibold text-red-600" role="alert">{inviteError}</p>}{inviteStatus && <p className="text-xs font-semibold text-[#4f8738]" role="status">{inviteStatus}</p>}</div> : <div className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-500 shadow-sm">초대와 권한 변경은 소유자만 할 수 있습니다.</div>}</> : <div className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-500 shadow-sm">Google 로그인 후 조감도를 공유할 수 있습니다.</div>}<div className="grid gap-2"><div className="flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-normal text-slate-500">멤버</h3><span className="text-xs font-semibold text-slate-400">{(selectedPlan.members ?? []).length}</span></div>{(selectedPlan.members ?? []).length > 0 ? (selectedPlan.members ?? []).map((member) => <div key={member.email} className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm"><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-700">{member.email}</p><p className="text-xs text-slate-500">{member.role === 'editor' ? '수정가능' : '읽기전용'}</p></div>{canManageSelectedPlan && <div className="flex items-center gap-1"><select value={member.role} onChange={(event) => updateMemberRole(member.email, event.target.value as Exclude<PlanRole, 'owner'>)} className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600"><option value="viewer">읽기</option><option value="editor">수정</option></select><button type="button" onClick={() => removeMember(member.email)} className="grid h-8 w-8 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label={`${member.email} 초대 제거`}><Trash2 size={14} /></button></div>}</div>) : <div className="rounded-md border border-dashed border-slate-200 bg-white/70 px-3 py-4 text-center text-xs text-slate-400">아직 초대된 멤버가 없습니다.</div>}</div></div>}
           {activeToolPanel === 'view' && <div className="grid gap-3 rounded-md bg-white p-3 shadow-sm ring-1 ring-slate-200"><label className="grid gap-1.5 text-xs font-semibold text-slate-500"><span className="flex items-center justify-between"><span>도면 밝기</span><span>{selectedPlan.backgroundFade ?? 62}%</span></span><input type="range" min="0" max="86" value={selectedPlan.backgroundFade ?? 62} onChange={(event) => updateSelectedPlan({ backgroundFade: Number(event.target.value) })} className="landi-range" /></label><label className="grid gap-1.5 text-xs font-semibold text-slate-500"><span className="flex items-center justify-between"><span>식재 진하기</span><span>{selectedPlan.plantIntensity ?? 125}%</span></span><input type="range" min="70" max="155" value={selectedPlan.plantIntensity ?? 125} onChange={(event) => updateSelectedPlan({ plantIntensity: Number(event.target.value) })} className="landi-range" /></label></div>}
           {activeToolPanel === 'schedule' && <div className="grid gap-3"><div className="flex items-end justify-between"><div><h3 className="text-lg font-semibold tracking-normal">수량 집계</h3><p className="text-sm text-slate-500">Plant schedule</p></div><span className="rounded-md bg-[#edf6e7] px-2.5 py-1 text-sm font-semibold text-[#4f8738]">총 {selectedPlan.plants.length}</span></div><div className="grid gap-2 md:grid-cols-2 lg:block lg:space-y-2">{inventory.map((item) => <div key={item.id} className="flex items-center justify-between rounded-md border border-slate-200 bg-white p-3 shadow-sm"><div className="flex min-w-0 items-center gap-3"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: item.colors.primary }} /><div className="min-w-0"><p className="truncate text-sm font-semibold leading-5 text-slate-800">{item.name}</p><p className="botanical-name truncate text-xs leading-4 text-slate-500">{item.label}</p></div></div><span className="text-lg font-semibold text-slate-900">{item.count}</span></div>)}</div></div>}
         </section>}

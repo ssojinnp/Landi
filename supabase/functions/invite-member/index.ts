@@ -44,10 +44,10 @@ Deno.serve(async (request) => {
   const mailClient = createClient(supabaseUrl, supabaseAnonKey)
 
   const token = authorization.replace('Bearer ', '')
-  const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token)
-  const userId = claimsData?.claims?.sub
-  const userEmail = typeof claimsData?.claims?.email === 'string' ? claimsData.claims.email : ''
-  if (claimsError || !userId) return jsonResponse({ error: '인증된 사용자만 초대할 수 있습니다.' }, 401)
+  const { data: userData, error: userError } = await userClient.auth.getUser(token)
+  const userId = userData.user?.id
+  const userEmail = userData.user?.email ?? ''
+  if (userError || !userId) return jsonResponse({ error: '인증된 사용자만 초대할 수 있습니다.' }, 401)
 
   const payload = await request.json() as InviteRequest
   const planId = payload.planId?.trim()
