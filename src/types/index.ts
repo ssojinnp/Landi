@@ -46,6 +46,7 @@ export interface Plan {
   palette: PlantTemplate[]
   plants: Plant[]
   backgroundFade?: number
+  backgroundSaturation?: number
   plantIntensity?: number
   ownerId?: string
   ownerEmail?: string

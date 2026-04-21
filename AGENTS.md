@@ -152,6 +152,9 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - 반복 아이템: `rounded-md bg-white/80 hover:bg-white hover:shadow-sm`
 - 패널 제목: `text-sm font-semibold text-slate-700`
 - 섹션 라벨: `text-xs font-semibold uppercase tracking-normal text-slate-500`
+- 빈 상태는 `rounded-md border border-dashed border-slate-300 bg-white/80` 톤을 우선 사용한다.
+- 목록 빈 상태는 사용자가 다음 행동을 바로 할 수 있도록 주요 CTA를 함께 제공한다. 예: `등록된 조감도가 없습니다` + `새 조감도 생성`.
+- 편집보드에서 도면이 없는 최초 상태는 보드 중앙에 도면 업로드 안내를 제공한다. 편집 권한이 있으면 `도면 업로드` CTA를 함께 노출하고, 읽기전용이면 업로드 불가 안내만 표시한다.
 
 현재 프로젝트는 `rounded-md` 중심의 단정한 도구형 UI를 사용한다. 신규 코드에서도 과한 라운드(`rounded-3xl` 등)는 특별한 이유가 없으면 사용하지 않는다.
 
@@ -198,7 +201,10 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - 보드 기본 크기는 `BOARD_WIDTH`, `BOARD_HEIGHT` 값을 기준으로 한다.
 - 보드는 배경 이미지가 없을 때 기본 조경 베이스를 렌더링한다.
 - 업로드된 도면 이미지는 비율을 유지하고 contain 방식에 가깝게 표시한다.
+- 표현 설정의 퍼센트 컨트롤은 모두 `0~100%` 범위를 사용한다. 100%를 초과하는 값은 신규 UI에서 만들지 않는다.
 - 도면 밝기 조절은 `backgroundFade` 값을 사용한다.
+- 도면 채도 조절은 `backgroundSaturation` 값을 사용하며 기본값은 `100`이다.
+- 편집보드, 조감도 목록 썸네일, 미리보기는 같은 도면 색상 처리 기준을 사용한다. 썸네일/미리보기에서 별도의 `grayscale` 또는 `saturate` 필터를 추가해 편집보드와 다르게 보이게 하지 않는다.
 - 식재 진하기 조절은 `plantIntensity` 값을 사용한다.
 - 보드 위 빈 상태 문구는 식재 배치를 유도하되, 도면 작업을 방해하지 않게 중앙에 작게 표시한다.
 
