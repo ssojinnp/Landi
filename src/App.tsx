@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import type { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent } from 'react'
 import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable'
-import { ArrowLeft, ChevronDown, ChevronUp, ClipboardList, Download, Eye, ImagePlus, Layers, LogIn, LogOut, Minus, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, SlidersHorizontal, Sprout, Trash2, UserRound, Users } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, ClipboardList, Download, Eye, ImagePlus, Layers, LogIn, LogOut, Minus, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, SlidersHorizontal, Sprout, Trash2, Trees, UserRound, Users } from 'lucide-react'
 import { PlanBase } from './components/canvas/PlanBase'
 import { PlantSymbol } from './components/canvas/PlantSymbol'
 import { BOARD_HEIGHT, BOARD_WIDTH, defaultPalette, flowerColorOptions, kindOptions, plantToneOptions, STORAGE_KEY } from './data/plants'
@@ -11,7 +11,7 @@ import { getPlanRole, getSessionUser, isSupabaseConfigured, normalizePlanForUser
 import type { Plan, Plant, PlantKind, PlantTemplate, PlanMember, PlanRole, ViewMode } from './types'
 
 function createPlan(title = '새 조감도', user?: LandiUser | null): Plan {
-  const plan: Plan = { id: `plan-${crypto.randomUUID()}`, title, updatedAt: new Date().toISOString(), backgroundUrl: null, palette: defaultPalette, plants: [], backgroundFade: 62, backgroundSaturation: 100, plantIntensity: 100, showPlantLabels: false }
+  const plan: Plan = { id: `plan-${crypto.randomUUID()}`, title, updatedAt: new Date().toISOString(), ...getEditorMetadata(user), backgroundUrl: null, palette: defaultPalette, plants: [], backgroundFade: 62, backgroundSaturation: 100, plantIntensity: 100, showPlantLabels: false }
   return user ? normalizePlanForUser(plan, user) : plan
 }
 
@@ -55,7 +55,50 @@ function createTemplate(kind: PlantKind, name: string, label = '', flowerAccent 
 }
 type ResizeAnchor = 'n' | 'e' | 's' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 type InspectorPanel = 'share' | 'view' | 'schedule'
+type SaveStatus = 'saved' | 'saving' | 'error'
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function getEditorMetadata(user?: LandiUser | null) {
+  return {
+    lastEditedById: user?.id,
+    lastEditedByEmail: user?.email,
+    lastEditedByName: user?.name ?? (user?.email ? user.email.split('@')[0] : '로컬 사용자'),
+  }
+}
+
+function formatRelativeTime(isoDate?: string) {
+  if (!isoDate) return '수정 정보 없음'
+  const diffMs = Date.now() - new Date(isoDate).getTime()
+  if (!Number.isFinite(diffMs)) return '수정 정보 없음'
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000))
+  if (diffMinutes < 1) return '방금 수정'
+  if (diffMinutes < 60) return `${diffMinutes}분 전 수정`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}시간 전 수정`
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) return `${diffDays}일 전 수정`
+  return new Date(isoDate).toLocaleDateString('ko-KR')
+}
+
+function getLastEditorLabel(plan: Plan) {
+  return plan.lastEditedByName ?? plan.lastEditedByEmail?.split('@')[0] ?? plan.ownerEmail?.split('@')[0] ?? '로컬 사용자'
+}
+
+function getPlanUpdatedLabel(plan: Plan) {
+  return `${getLastEditorLabel(plan)} · ${formatRelativeTime(plan.updatedAt)}`
+}
+
+function getSaveStatusLabel(status: SaveStatus) {
+  if (status === 'saving') return '저장 중'
+  if (status === 'error') return '저장 실패'
+  return '저장됨'
+}
+
+function getSaveStatusClass(status: SaveStatus) {
+  if (status === 'saving') return 'text-amber-700'
+  if (status === 'error') return 'text-red-600'
+  return 'text-slate-400'
+}
 
 function getMemberStatusLabel(status: PlanMember['status']) {
   return status === 'joined' ? '참여 완료' : '초대 대기'
@@ -215,12 +258,15 @@ function App() {
   const [inviteError, setInviteError] = useState('')
   const [inviteStatus, setInviteStatus] = useState('')
   const [isInviting, setIsInviting] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [boardScale, setBoardScale] = useState(1)
   const [viewport, setViewport] = useState(() => ({ width: typeof window === 'undefined' ? 1440 : window.innerWidth, height: typeof window === 'undefined' ? 900 : window.innerHeight }))
   const [allowPortraitEditing, setAllowPortraitEditing] = useState(false)
   const boardFrameRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const applyingRemotePlansRef = useRef(false)
+  const saveSequenceRef = useRef(0)
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? plans[0]
   const selectedPlant = selectedPlan?.plants.find((plant) => plant.instanceId === selectedPlantId)
@@ -305,19 +351,34 @@ function App() {
       applyingRemotePlansRef.current = false
       return
     }
-    if (!supabase || !authUser) return
+    if (!supabase || !authUser) {
+      return
+    }
 
     const ownerPlans = plans.filter((plan) => getPlanRole(plan, authUser) === 'owner')
     const editorPlans = plans.filter((plan) => getPlanRole(plan, authUser) === 'editor')
-    if (ownerPlans.length === 0 && editorPlans.length === 0) return
+    if (ownerPlans.length === 0 && editorPlans.length === 0) {
+      return
+    }
 
     void (async () => {
+      const saveSequence = saveSequenceRef.current + 1
+      saveSequenceRef.current = saveSequence
+      if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
+      saveStatusTimerRef.current = window.setTimeout(() => {
+        if (saveSequenceRef.current === saveSequence) setSaveStatus('saving')
+      }, 700)
       const ownerRows = ownerPlans.map((plan) => planToSharedRow(plan, authUser))
       if (ownerRows.length > 0) {
         const { error } = await supabase
           .from('plans')
           .upsert(ownerRows, { onConflict: 'id' })
         if (error) {
+          if (saveSequenceRef.current === saveSequence) {
+            if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
+            saveStatusTimerRef.current = null
+            setSaveStatus('error')
+          }
           setAuthError(`공유 조감도를 저장하지 못했습니다. ${error.message}`)
           return
         }
@@ -336,9 +397,19 @@ function App() {
           })
           .eq('id', row.id)
         if (error) {
+          if (saveSequenceRef.current === saveSequence) {
+            if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
+            saveStatusTimerRef.current = null
+            setSaveStatus('error')
+          }
           setAuthError(`공유 조감도를 저장하지 못했습니다. ${error.message}`)
           return
         }
+      }
+      if (saveSequenceRef.current === saveSequence) {
+        if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
+        saveStatusTimerRef.current = null
+        setSaveStatus('saved')
       }
     })()
   }, [plans, authUser])
@@ -365,11 +436,15 @@ function App() {
     return () => observer.disconnect()
   }, [mode])
 
+  useEffect(() => () => {
+    if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
+  }, [])
+
   const updateSelectedPlan = (updates: Partial<Plan>) => {
     if (!selectedPlan || !canEditSelectedPlan) return
     setPlans((current) => current.map((plan) => {
       if (plan.id !== selectedPlan.id) return plan
-      const nextPlan = { ...plan, ...updates, updatedAt: new Date().toISOString() }
+      const nextPlan = { ...plan, ...updates, updatedAt: new Date().toISOString(), ...getEditorMetadata(authUser) }
       return authUser ? normalizePlanForUser(nextPlan, authUser) : nextPlan
     }))
   }
@@ -414,7 +489,7 @@ function App() {
       { id: existingMember?.id ?? `member-${crypto.randomUUID()}`, email, role: inviteRole, invitedAt: existingMember?.invitedAt ?? new Date().toISOString(), invitedBy: existingMember?.invitedBy ?? authUser.email, status: existingMember?.status ?? 'invited' as const, joinedAt: existingMember?.joinedAt },
     ]
     const accessEmails = Array.from(new Set([...(selectedPlan.accessEmails ?? []), selectedPlan.ownerEmail ?? authUser.email, email].map((item) => item.toLowerCase()).filter(Boolean)))
-    const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, accessEmails, updatedAt: new Date().toISOString() }, authUser)
+    const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, accessEmails, updatedAt: new Date().toISOString(), ...getEditorMetadata(authUser) }, authUser)
     setInviteError('')
     setInviteEmail('')
     updateSelectedPlan({ members: nextMembers, accessEmails })
@@ -493,7 +568,7 @@ function App() {
     if (!selectedPlan || !canManageSelectedPlan || !authUser) return
     const normalizedEmail = email.toLowerCase()
     const nextMembers = (selectedPlan.members ?? []).map((member) => member.email.toLowerCase() === normalizedEmail ? { ...member, role } : member)
-    const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, updatedAt: new Date().toISOString() }, authUser)
+    const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, updatedAt: new Date().toISOString(), ...getEditorMetadata(authUser) }, authUser)
     updateSelectedPlan({ members: nextMembers })
     await persistMemberAccess(nextPlan, '멤버 권한을 업데이트했습니다.')
   }
@@ -503,7 +578,7 @@ function App() {
     const normalizedEmail = email.toLowerCase()
     const nextMembers = (selectedPlan.members ?? []).filter((member) => member.email.toLowerCase() !== normalizedEmail)
     const nextAccessEmails = (selectedPlan.accessEmails ?? []).filter((item) => item.toLowerCase() !== normalizedEmail)
-    const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, accessEmails: nextAccessEmails, updatedAt: new Date().toISOString() }, authUser)
+    const nextPlan = normalizePlanForUser({ ...selectedPlan, members: nextMembers, accessEmails: nextAccessEmails, updatedAt: new Date().toISOString(), ...getEditorMetadata(authUser) }, authUser)
     updateSelectedPlan({ members: nextMembers, accessEmails: nextAccessEmails })
     await persistMemberAccess(nextPlan, '멤버 접근 권한을 삭제했습니다.')
   }
@@ -717,6 +792,9 @@ function App() {
   const leftPanelClass = `landi-editor-panel ${isPaletteCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-slate-200 bg-[#fbfbf8] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:border-b-0 lg:border-r ${isPaletteCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
   const roleLabel = selectedPlanRole === 'owner' ? '소유자' : selectedPlanRole === 'editor' ? '수정가능' : '읽기전용'
   const ownerLabel = selectedPlan?.ownerEmail ?? authUser?.email ?? '로컬 조감도'
+  const selectedPlanUpdatedLabel = selectedPlan ? getPlanUpdatedLabel(selectedPlan) : ''
+  const saveStatusLabel = getSaveStatusLabel(saveStatus)
+  const saveStatusClass = getSaveStatusClass(saveStatus)
   const toolPanelLabel = activeToolPanel === 'share' ? '공유' : activeToolPanel === 'view' ? '표현 설정' : activeToolPanel === 'schedule' ? '수량 집계' : ''
   const toolRailButtonClass = (panel: InspectorPanel) => `grid h-10 w-10 place-items-center rounded-md border text-sm transition ${activeToolPanel === panel ? 'border-[#9fbd86] bg-[#edf6e7] text-[#4f8738] shadow-sm' : 'border-transparent text-slate-500 hover:border-slate-200 hover:bg-white hover:text-slate-700'}`
   const toggleToolPanel = (panel: InspectorPanel) => setActiveToolPanel((current) => current === panel ? null : panel)
@@ -725,11 +803,11 @@ function App() {
   const authControls = authUser ? <div className="flex h-10 items-center overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"><div className="hidden min-w-0 max-w-[190px] items-center gap-2 px-3 text-sm font-semibold text-slate-700 md:flex" title={authUser.email}><UserRound size={16} className="shrink-0 text-[#4f8738]" /><span className="truncate">{authUser.name}</span>{mode === 'edit' && <span className="shrink-0 text-xs font-semibold text-slate-400">{roleLabel}</span>}</div><button type="button" onClick={signOut} title="로그아웃" className="grid h-10 w-10 place-items-center border-l border-slate-200 text-slate-600 transition hover:bg-slate-50" aria-label="로그아웃"><LogOut size={17} /></button></div> : <button type="button" onClick={signInWithGoogle} className={`${actionButtonClass} border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50`}><LogIn size={17} />Google 로그인</button>
 
   if (mode === 'list') {
-    return <main data-theme="light" className="landi-app min-h-screen bg-[#eceee8] px-5 py-6 text-slate-900 md:px-8"><header className="mx-auto mb-6 flex max-w-6xl flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-md bg-[#4f8738] text-white shadow-sm"><img src="/landi-mark.svg" alt="" className="h-7 w-7" /></div><div><h1 className="text-2xl font-semibold tracking-normal">Landi</h1><p className="text-sm text-slate-500">조감도 목록</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}<button type="button" onClick={createNewPlan} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Plus size={17} />새 조감도 생성</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{authError}</div>}{!isSupabaseConfigured && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">Supabase 환경 변수를 설정하면 Google 로그인과 멤버 초대가 활성화됩니다.</div>}<section className="mx-auto grid max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-3">{plans.length === 0 ? <div className="rounded-md border border-dashed border-slate-300 bg-white/80 px-5 py-12 text-center shadow-sm md:col-span-2 xl:col-span-3"><div className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-[#edf6e7] text-[#4f8738]"><Layers size={24} /></div><h2 className="mt-4 text-lg font-semibold text-slate-900">등록된 조감도가 없습니다</h2><p className="mx-auto mt-2 max-w-[360px] text-sm leading-6 text-slate-500">새 조감도를 생성한 뒤 도면을 업로드하고 식재 팔레트를 구성해보세요.</p><button type="button" onClick={createNewPlan} className={`${actionButtonClass} mx-auto mt-5 bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Plus size={17} />새 조감도 생성</button></div> : plans.map((plan) => { const cardRole = getPlanRole(plan, authUser); const canOpenEditor = cardRole === 'owner' || cardRole === 'editor'; return <article key={plan.id} className="landi-plan-card rounded-md border border-slate-200 bg-white p-4 shadow-sm"><PlanThumbnail plan={plan} /><div className="mt-4 flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-1.5 flex items-center gap-2"><h2 className="truncate text-lg font-semibold">{plan.title}</h2><span className={`shrink-0 rounded-sm px-2 py-0.5 text-[11px] font-semibold ${cardRole === 'viewer' ? 'bg-slate-100 text-slate-500' : 'bg-[#edf6e7] text-[#4f8738]'}`}>{getPlanRoleLabel(cardRole)}</span></div><p className="text-sm text-slate-500">식재 {plan.plants.length}개 · {new Date(plan.updatedAt).toLocaleDateString()}</p></div>{cardRole === 'owner' && <button type="button" onClick={() => deletePlan(plan.id)} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label="조감도 삭제"><Trash2 size={18} /></button>}</div><div className={`mt-4 grid gap-2 ${canOpenEditor ? 'grid-cols-2' : 'grid-cols-1'}`}><button type="button" onClick={() => openPreview(plan.id)} className={`${actionButtonClass} w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}><Eye size={17} />미리보기</button>{canOpenEditor && <button type="button" onClick={() => openEditor(plan.id)} className={`${actionButtonClass} w-full bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Pencil size={17} />편집보드</button>}</div></article> })}</section></main>
+    return <main data-theme="light" className="landi-app min-h-screen bg-[#eceee8] px-5 py-6 text-slate-900 md:px-8"><header className="mx-auto mb-6 flex max-w-6xl flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-md bg-[#4f8738] text-white shadow-sm"><Trees size={24} /></div><div><h1 className="text-2xl font-semibold tracking-normal">Landi</h1><p className="text-sm text-slate-500">조감도 목록</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}<button type="button" onClick={createNewPlan} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Plus size={17} />새 조감도 생성</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{authError}</div>}{!isSupabaseConfigured && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">Supabase 환경 변수를 설정하면 Google 로그인과 멤버 초대가 활성화됩니다.</div>}<section className="mx-auto grid max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-3">{plans.length === 0 ? <div className="rounded-md border border-dashed border-slate-300 bg-white/80 px-5 py-12 text-center shadow-sm md:col-span-2 xl:col-span-3"><div className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-[#edf6e7] text-[#4f8738]"><Layers size={24} /></div><h2 className="mt-4 text-lg font-semibold text-slate-900">등록된 조감도가 없습니다</h2><p className="mx-auto mt-2 max-w-[360px] text-sm leading-6 text-slate-500">새 조감도를 생성한 뒤 도면을 업로드하고 식재 팔레트를 구성해보세요.</p><button type="button" onClick={createNewPlan} className={`${actionButtonClass} mx-auto mt-5 bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Plus size={17} />새 조감도 생성</button></div> : plans.map((plan) => { const cardRole = getPlanRole(plan, authUser); const canOpenEditor = cardRole === 'owner' || cardRole === 'editor'; return <article key={plan.id} className="landi-plan-card rounded-md border border-slate-200 bg-white p-4 shadow-sm"><PlanThumbnail plan={plan} /><div className="mt-4 flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-1.5 flex items-center gap-2"><h2 className="truncate text-lg font-semibold">{plan.title}</h2><span className={`shrink-0 rounded-sm px-2 py-0.5 text-[11px] font-semibold ${cardRole === 'viewer' ? 'bg-slate-100 text-slate-500' : 'bg-[#edf6e7] text-[#4f8738]'}`}>{getPlanRoleLabel(cardRole)}</span></div><p className="text-sm text-slate-500">식재 {plan.plants.length}개 · {getPlanUpdatedLabel(plan)}</p></div>{cardRole === 'owner' && <button type="button" onClick={() => deletePlan(plan.id)} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label="조감도 삭제"><Trash2 size={18} /></button>}</div><div className={`mt-4 grid gap-2 ${canOpenEditor ? 'grid-cols-2' : 'grid-cols-1'}`}><button type="button" onClick={() => openPreview(plan.id)} className={`${actionButtonClass} w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}><Eye size={17} />미리보기</button>{canOpenEditor && <button type="button" onClick={() => openEditor(plan.id)} className={`${actionButtonClass} w-full bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Pencil size={17} />편집보드</button>}</div></article> })}</section></main>
   }
 
   if (mode === 'preview' && selectedPlan) {
-    return <main data-theme="light" className="landi-app min-h-screen bg-[#eceee8] p-5 text-slate-900 md:p-8"><header className="mx-auto mb-5 flex max-w-6xl flex-wrap items-center justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => setMode('list')} className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition hover:text-slate-900"><ArrowLeft size={16} />목록으로</button><div className="grid gap-0.5"><h1 className="truncate text-[22px] font-semibold leading-7 tracking-normal text-slate-900">{selectedPlan.title}</h1><p className="text-[13px] font-medium leading-5 text-slate-500">식재 {selectedPlan.plants.length}개 · 미리보기</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}<button type="button" onClick={() => openEditor(selectedPlan.id)} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Pencil size={17} />편집보드로</button><button type="button" onClick={() => deletePlan(selectedPlan.id)} className={`${actionButtonClass} border border-red-200 bg-white text-red-600 hover:bg-red-50`}><Trash2 size={17} />삭제</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{authError}</div>}<section className="mx-auto max-w-6xl overflow-auto rounded-md bg-white p-4 shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><StaticPlanBoard plan={selectedPlan} /></section></main>
+    return <main data-theme="light" className="landi-app min-h-screen bg-[#eceee8] p-5 text-slate-900 md:p-8"><header className="mx-auto mb-5 flex max-w-6xl flex-wrap items-center justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => setMode('list')} className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition hover:text-slate-900"><ArrowLeft size={16} />목록으로</button><div className="grid gap-0.5"><h1 className="truncate text-[22px] font-semibold leading-7 tracking-normal text-slate-900">{selectedPlan.title}</h1><p className="text-[13px] font-medium leading-5 text-slate-500">식재 {selectedPlan.plants.length}개 · {selectedPlanUpdatedLabel}</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}<button type="button" onClick={() => openEditor(selectedPlan.id)} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Pencil size={17} />편집보드로</button><button type="button" onClick={() => deletePlan(selectedPlan.id)} className={`${actionButtonClass} border border-red-200 bg-white text-red-600 hover:bg-red-50`}><Trash2 size={17} />삭제</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{authError}</div>}<section className="mx-auto max-w-6xl overflow-auto rounded-md bg-white p-4 shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><StaticPlanBoard plan={selectedPlan} /></section></main>
   }
 
   if (!selectedPlan) return null
@@ -737,7 +815,7 @@ function App() {
   return (
     <main data-theme="light" className="landi-app flex min-h-screen flex-col overflow-y-auto bg-[#eceee8] text-slate-900 lg:h-screen lg:min-h-0 lg:overflow-hidden lg:flex-row">
       <aside className={leftPanelClass}>
-        <div className={`flex shrink-0 border-b border-slate-200 ${isPaletteCollapsed ? 'h-12 items-center justify-between px-2 lg:h-auto lg:flex-col lg:items-center lg:justify-start lg:border-b-0 lg:px-2 lg:py-3' : 'h-16 items-center px-4 md:px-5'}`}><div className={`flex min-w-0 items-center ${isPaletteCollapsed ? 'gap-2 lg:flex-col' : 'gap-2.5'}`}><div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#4f8738] text-white shadow-sm" title="Landi"><img src="/landi-mark.svg" alt="" className="h-6 w-6" /></div><div className={isPaletteCollapsed ? 'hidden' : ''}><h1 className="text-lg font-semibold tracking-normal">Landi</h1><p className="text-[13px] text-slate-500">편집보드</p></div></div>{isPaletteCollapsed && <span className="mx-1 h-6 w-px bg-slate-200 lg:mx-0 lg:my-3 lg:h-px lg:w-8" aria-hidden="true" />}<div className={`flex items-center gap-1.5 ${isPaletteCollapsed ? 'lg:flex-col' : 'ml-auto'}`}><button type="button" onClick={() => setMode('list')} className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label="목록으로" title="목록으로"><ArrowLeft size={17} /></button><button type="button" onClick={() => setIsPaletteCollapsed((collapsed) => !collapsed)} className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label={isPaletteCollapsed ? '식재 팔레트 펼치기' : '식재 팔레트 접기'} title={isPaletteCollapsed ? '식재 팔레트 펼치기' : '식재 팔레트 접기'}>{isPaletteCollapsed ? <><ChevronDown size={17} className="lg:hidden" /><PanelLeftOpen size={17} className="hidden lg:block" /></> : <><ChevronUp size={17} className="lg:hidden" /><PanelLeftClose size={17} className="hidden lg:block" /></>}</button></div></div>
+        <div className={`flex shrink-0 border-b border-slate-200 ${isPaletteCollapsed ? 'h-12 items-center justify-between px-2 lg:h-auto lg:flex-col lg:items-center lg:justify-start lg:border-b-0 lg:px-2 lg:py-3' : 'h-16 items-center px-4 md:px-5'}`}><div className={`flex min-w-0 items-center ${isPaletteCollapsed ? 'gap-2 lg:flex-col' : 'gap-2.5'}`}><div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#4f8738] text-white shadow-sm" title="Landi"><Trees size={20} /></div><div className={isPaletteCollapsed ? 'hidden' : ''}><h1 className="text-lg font-semibold tracking-normal">Landi</h1><p className="text-[13px] text-slate-500">편집보드</p></div></div>{isPaletteCollapsed && <span className="mx-1 h-6 w-px bg-slate-200 lg:mx-0 lg:my-3 lg:h-px lg:w-8" aria-hidden="true" />}<div className={`flex items-center gap-1.5 ${isPaletteCollapsed ? 'lg:flex-col' : 'ml-auto'}`}><button type="button" onClick={() => setMode('list')} className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label="목록으로" title="목록으로"><ArrowLeft size={17} /></button><button type="button" onClick={() => setIsPaletteCollapsed((collapsed) => !collapsed)} className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label={isPaletteCollapsed ? '식재 팔레트 펼치기' : '식재 팔레트 접기'} title={isPaletteCollapsed ? '식재 팔레트 펼치기' : '식재 팔레트 접기'}>{isPaletteCollapsed ? <><ChevronDown size={17} className="lg:hidden" /><PanelLeftOpen size={17} className="hidden lg:block" /></> : <><ChevronUp size={17} className="lg:hidden" /><PanelLeftClose size={17} className="hidden lg:block" /></>}</button></div></div>
         <section className={`flex min-h-0 flex-1 flex-col px-4 py-3 lg:overflow-hidden ${isPaletteCollapsed ? 'hidden' : ''}`}><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-700">식재 팔레트</h2><Sprout size={17} className="text-[#4f8738]" /></div><div className="mb-3 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"><button type="button" onClick={() => canEditSelectedPlan && setIsPaletteFormOpen((open) => !open)} disabled={!canEditSelectedPlan} className="landi-form-trigger flex h-10 w-full items-center justify-between gap-3 px-3 text-left text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"><span>{editingTemplateId ? "식재 타입 수정" : "식재 타입 등록"}</span><span className="rounded-sm bg-[#edf6e7] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#4f8738]">{isPaletteFormOpen ? "닫기" : "열기"}</span></button>{isPaletteFormOpen && <div className="grid gap-2 border-t border-slate-100 p-3"><select value={newPlantKind} onChange={(event) => setNewPlantKind(event.target.value as PlantKind)} className="landi-form-control h-9 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2.5 text-slate-700 outline-none focus:border-[#4f8738]">{kindOptions.map((option) => <option key={option.kind} value={option.kind}>{option.label}</option>)}</select><input value={newPlantName} onChange={(event) => { setNewPlantName(event.target.value); if (paletteFormError) setPaletteFormError("") }} placeholder="식재명 예: 라벤더" aria-invalid={Boolean(paletteFormError)} className={`landi-form-control h-9 w-full min-w-0 rounded-md border px-2.5 outline-none focus:border-[#4f8738] ${paletteFormError ? "border-red-400 bg-red-50" : "border-slate-300"}`} />{paletteFormError && <p className="text-xs font-semibold text-red-600" role="alert">{paletteFormError}</p>}{newPlantKind === 'flower' && <div className="rounded-md border border-slate-200 bg-[#fbfbf8] p-2"><div className="mb-2 text-xs font-semibold text-slate-500">꽃 색상</div><div className="grid grid-cols-6 gap-1.5">{flowerColorOptions.map((color) => <button key={color.value} type="button" onClick={() => setNewFlowerColor(color.value)} title={color.name} className={`h-7 rounded-md border shadow-sm ${newFlowerColor === color.value ? 'border-slate-900 ring-2 ring-slate-300' : 'border-white'}`} style={{ backgroundColor: color.value }} aria-label={`${color.name} 꽃 색상 선택`} />)}</div></div>}<input value={newPlantLabel} onChange={(event) => { setNewPlantLabel(event.target.value); if (paletteFormError) setPaletteFormError("") }} placeholder="학명/메모 선택" className="landi-form-control h-9 w-full min-w-0 rounded-md border border-slate-300 px-2.5 outline-none focus:border-[#4f8738]" /><button type="button" onClick={addTemplateToPalette} className="landi-form-control inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#4f8738] px-3 text-white shadow-sm transition hover:bg-[#3f6f2d]"><Plus size={16} />{editingTemplateId ? "팔레트 수정" : "팔레트 등록"}</button>{editingTemplateId && <button type="button" onClick={resetPaletteForm} className="landi-form-control inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-slate-600 shadow-sm transition hover:bg-slate-50">수정 취소</button>}</div>}</div><div className="min-h-0 flex-1 overflow-y-auto pr-1">
   {kindOptions.map((group) => {
     const groupTemplates = selectedPlan.palette.filter((template) => template.category === group.category)
@@ -809,7 +887,7 @@ function App() {
 </div></section>
       </aside>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-[74px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#fbfbf8] px-4 py-3 md:px-6"><label className="group flex min-w-[240px] flex-1 cursor-text items-center gap-2 rounded-md border border-transparent px-2 py-1.5 transition hover:border-[#9fbd86] hover:bg-white/70 focus-within:border-[#4f8738] focus-within:bg-white focus-within:shadow-sm"><span className="sr-only">조감도 제목</span><input value={selectedPlan.title} onChange={(event) => updateSelectedPlan({ title: event.target.value })} disabled={!canEditSelectedPlan} className="min-w-0 flex-1 bg-transparent text-2xl font-semibold tracking-normal outline-none disabled:cursor-not-allowed" aria-label="조감도 제목" /><Pencil size={16} className="shrink-0 text-slate-400 transition group-hover:text-[#4f8738]" aria-hidden="true" /></label><div className="flex flex-wrap items-center gap-2">{authControls}<button type="button" onClick={exportPlanImage} disabled={isExporting} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d] disabled:cursor-wait disabled:opacity-70`}><Download size={17} />{isExporting ? "내보내는 중" : "내보내기"}</button>{canEditSelectedPlan && <label title="도면 업로드" aria-label="도면 업로드" className="grid h-10 w-10 cursor-pointer place-items-center rounded-md bg-[#4f8738] text-white shadow-sm transition hover:bg-[#3f6f2d]"><ImagePlus size={18} /><input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="sr-only" /></label>}</div></header>
+        <header className="flex h-[64px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#fbfbf8] px-4 py-3 md:px-6"><div className="flex min-w-[240px] flex-1 items-center gap-2 overflow-hidden"><label className="group flex h-9 min-w-[180px] max-w-[620px] flex-[1_1_620px] cursor-text items-center gap-2 rounded-md border border-transparent px-2 transition hover:border-[#9fbd86] hover:bg-white/60 focus-within:border-[#4f8738] focus-within:bg-white/80 focus-within:shadow-sm"><span className="sr-only">조감도 제목</span><input value={selectedPlan.title} onChange={(event) => updateSelectedPlan({ title: event.target.value })} disabled={!canEditSelectedPlan} className="landi-title-input min-w-[120px] w-full bg-transparent text-[19px] leading-6 tracking-normal text-slate-900 outline-none disabled:cursor-not-allowed" aria-label="조감도 제목" /><Pencil size={16} className="shrink-0 text-slate-400 transition group-hover:text-[#4f8738]" aria-hidden="true" /></label><span className="hidden max-w-[180px] shrink truncate text-[12px] font-medium leading-4 text-slate-500 xl:inline">{selectedPlanUpdatedLabel}</span>{saveStatus !== 'saved' && <span className={`hidden shrink-0 text-[12px] font-medium leading-4 xl:inline ${saveStatusClass}`} role="status">{saveStatusLabel}</span>}</div><div className="flex flex-wrap items-center gap-2">{authControls}<button type="button" onClick={exportPlanImage} disabled={isExporting} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d] disabled:cursor-wait disabled:opacity-70`}><Download size={17} />{isExporting ? "내보내는 중" : "내보내기"}</button>{canEditSelectedPlan && <label title="도면 업로드" aria-label="도면 업로드" className="grid h-10 w-10 cursor-pointer place-items-center rounded-md bg-[#4f8738] text-white shadow-sm transition hover:bg-[#3f6f2d]"><ImagePlus size={18} /><input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="sr-only" /></label>}</div></header>
         {authError && <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{authError}</div>}
         {!canEditSelectedPlan && <div className="mx-4 mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">읽기전용 권한입니다. 조감도 확인과 이미지 내보내기만 사용할 수 있습니다.</div>}
         {exportError && <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{exportError}</div>}
@@ -852,6 +930,15 @@ function App() {
 }
 
 export default App
+
+
+
+
+
+
+
+
+
 
 
 

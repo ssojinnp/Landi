@@ -42,6 +42,9 @@ export interface Plan {
   id: string
   title: string
   updatedAt: string
+  lastEditedById?: string
+  lastEditedByEmail?: string
+  lastEditedByName?: string
   backgroundUrl: string | null
   palette: PlantTemplate[]
   plants: Plant[]
