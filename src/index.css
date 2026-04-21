@@ -35,7 +35,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -54,7 +55,20 @@ select {
 
 input::placeholder {
   color: #94a3b8;
-  font-size: 12px;
+}
+
+.landi-form-control {
+  min-height: 36px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.landi-form-control::placeholder {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
 }
 
 .landi-panel-title {
