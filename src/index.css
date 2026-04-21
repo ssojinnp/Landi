@@ -78,6 +78,12 @@ input::placeholder {
   font-weight: 600;
 }
 
+.landi-form-trigger {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
 .landi-panel-title {
   font-size: 13px;
   font-weight: 700;
@@ -244,20 +250,8 @@ input::placeholder {
 .landi-exporting .bg-\[\#4f8738\] {
   background-color: #4f8738 !important;
 }
-.landi-panel-toggle {
-  display: none;
-}
-
 .landi-editor-panel.is-collapsed {
   overflow: hidden;
-}
-
-.landi-editor-panel.is-collapsed > :not(.landi-panel-toggle) {
-  display: none !important;
-}
-
-.landi-editor-panel.is-collapsed > .landi-panel-toggle {
-  display: flex;
 }
 
 @media (max-width: 1023px) {
@@ -271,11 +265,6 @@ input::placeholder {
 @media (min-width: 1024px) {
   .landi-editor-panel.is-collapsed {
     align-items: center;
-    padding-top: 12px;
-  }
-
-  .landi-editor-panel.is-collapsed > .landi-panel-toggle {
-    display: grid;
   }
 }
 
