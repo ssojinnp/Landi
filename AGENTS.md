@@ -237,7 +237,8 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - 편집보드, 조감도 목록 썸네일, 미리보기는 같은 도면 색상 처리 기준을 사용한다. 썸네일/미리보기에서 별도의 `grayscale` 또는 `saturate` 필터를 추가해 편집보드와 다르게 보이게 하지 않는다.
 - 식재 진하기 조절은 `plantIntensity` 값을 사용한다.
 - 식재명 상시 표시 여부는 `showPlantLabels` 값을 사용한다. 기본값은 `false`이며, 꺼져 있을 때는 hover 라벨만 표시하고 내보내기에서는 제외한다. 해당 UI는 우측 `보드 설정` 탭의 `식재` 섹션에 둔다.
-- `showPlantLabels`가 켜져 있을 때는 식재명 라벨을 보드 위에 상시 표시하고 이미지 내보내기 결과에도 포함한다. export에 포함되는 라벨은 html2canvas 호환을 위해 Tailwind 투명 색상/ring 대신 안전한 inline RGB/RGBA 스타일을 우선 사용한다.
+- `showPlantLabels`가 켜져 있을 때는 같은 `templateId` 식재 중 대표 1개에만 식재명 라벨을 상시 표시하고 이미지 내보내기 결과에도 포함한다. 동일 식재 전체에 라벨을 반복하면 도면 판독성이 급격히 떨어지므로 피한다.
+- export에 포함되는 라벨은 html2canvas 호환을 위해 Tailwind 투명 색상/ring 대신 안전한 inline RGB/RGBA 스타일을 우선 사용한다.
 - 식재명 라벨은 화면 표시와 이미지 내보내기의 baseline이 다를 수 있으므로 텍스트 span에 `.landi-plant-label-text`를 사용한다. export baseline 보정은 `.landi-exporting .landi-plant-label-text`에서만 적용한다.
 - 식재명 상시 라벨과 hover 전용 라벨은 토글 시 배경색이 반전되어 깜빡이지 않도록 별도 DOM으로 분리한다.
 - 보드 위 빈 상태 문구는 식재 배치를 유도하되, 도면 작업을 방해하지 않게 중앙에 작게 표시한다.
