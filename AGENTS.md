@@ -130,6 +130,20 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - Hover green: `#3f6f2d`
 - Soft green background: `#edf6e7`
 - Selection blue: `#2563eb`
+- Accent copper: `#B66A3C`
+- Accent copper dark: `#7A3F22`
+- Accent copper soft: `#F7E9DF`
+- Accent copper border: `#E8D8CC`
+
+### 1-1) 보조 포인트 컬러
+
+- Landi의 주색은 Primary green `#4f8738`로 유지한다.
+- 초록 일변도로 화면이 단조로워지는 것을 피하기 위해 Copper 계열을 보조 포인트로 사용한다.
+- Green은 생성, 등록, 활성 식재, 브랜드 신호에 사용한다.
+- Copper는 공유, 권한, 소유자 상태, 메타 정보, 빈 상태 보조 강조에만 제한적으로 사용한다.
+- 삭제/오류는 red 계열을 유지하고 Copper와 섞지 않는다.
+- Blue는 보드 선택 outline처럼 조작 정확성이 필요한 곳에만 제한적으로 사용한다.
+- Purple/violet 계열 포인트나 보라 그라데이션은 Landi의 조경/현장 문서 톤과 맞지 않으므로 사용하지 않는다.
 
 ### 2) 레이아웃
 
@@ -172,6 +186,10 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - 주요 액션은 `bg-[#4f8738] text-white hover:bg-[#3f6f2d]`
 - 보조 액션은 `border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`
 - 위험 액션은 `text-red-600 hover:bg-red-50`
+- Green primary는 생성, 등록, 식재, 내보내기처럼 결과를 만드는 주요 액션에 사용한다.
+- Copper primary는 도면 업로드, 공유 초대, 권한/소유자 관련 액션처럼 프로젝트 설정/협업 맥락에 사용한다.
+- White/slate 버튼은 미리보기, 목록 이동, 접기/펼치기, 취소 등 탐색/보조 액션에 사용한다.
+- Red는 삭제/오류에만 사용한다.
 - 아이콘 전용 버튼은 `grid h-8~10 w-8~10 place-items-center rounded-md` 패턴을 우선 사용한다.
 - 버튼 텍스트와 아이콘이 세로 중앙에 맞지 않으면 높이, line-height, icon size를 함께 조정한다.
 
@@ -267,6 +285,10 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 | Primary green | `#4f8738` | `bg-[#4f8738]`, `text-[#4f8738]` |
 | Hover green | `#3f6f2d` | `hover:bg-[#3f6f2d]` |
 | Soft green | `#edf6e7` | `bg-[#edf6e7]` |
+| Accent copper | `#B66A3C` | `var(--landi-accent-copper)` |
+| Accent copper dark | `#7A3F22` | `var(--landi-accent-copper-dark)` |
+| Accent copper soft | `#F7E9DF` | `var(--landi-accent-copper-soft)` |
+| Accent copper border | `#E8D8CC` | `var(--landi-accent-copper-border)` |
 | App background | `#eceee8` | `bg-[#eceee8]` |
 | Panel background | `#fbfbf8` | `bg-[#fbfbf8]` |
 | Board background | `#f7f7f2` | `bg-[#f7f7f2]` |
