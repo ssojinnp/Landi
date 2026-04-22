@@ -10,6 +10,10 @@ import { BOARD_HEIGHT, BOARD_WIDTH, defaultPalette, flowerColorOptions, kindOpti
 import { getPlanRole, getSessionUser, isSupabaseConfigured, normalizePlanForUser, planToSharedRow, sharedRowToPlan, supabase, type LandiUser, type SharedPlanRow } from './lib/supabase'
 import type { Plan, Plant, PlantKind, PlantTemplate, PlanMember, PlanRole, ViewMode } from './types'
 
+const PLANT_SIZE_MIN = 28
+const PLANT_SIZE_MAX = 190
+const PLANT_SIZE_STEP = 8
+
 function createPlan(title = '새 조감도', user?: LandiUser | null): Plan {
   const plan: Plan = { id: `plan-${crypto.randomUUID()}`, title, updatedAt: new Date().toISOString(), ...getEditorMetadata(user), backgroundUrl: null, palette: defaultPalette, plants: [], backgroundFade: 62, backgroundSaturation: 100, plantIntensity: 100, showPlantLabels: false }
   return user ? normalizePlanForUser(plan, user) : plan
@@ -17,6 +21,10 @@ function createPlan(title = '새 조감도', user?: LandiUser | null): Plan {
 
 function clampPercent(value: number) {
   return Math.min(100, Math.max(0, value))
+}
+
+function clampPlantSize(value: number) {
+  return Math.min(PLANT_SIZE_MAX, Math.max(PLANT_SIZE_MIN, value))
 }
 
 function getExportFormatFromFileName(fileName: string): 'png' | 'jpg' | null {
@@ -170,7 +178,7 @@ function PlacedPlant({ plant, selected, plantIntensity, showLabel, boardScale, r
       const horizontalDelta = anchor.includes('e') ? deltaX : anchor.includes('w') ? -deltaX : 0
       const verticalDelta = anchor.includes('s') ? deltaY : anchor.includes('n') ? -deltaY : 0
       const delta = anchor.length === 2 ? Math.abs(horizontalDelta) > Math.abs(verticalDelta) ? horizontalDelta : verticalDelta : horizontalDelta || verticalDelta
-      const nextSize = Math.min(190, Math.max(28, startSize + delta))
+      const nextSize = clampPlantSize(startSize + delta)
       const sizeDelta = nextSize - startSize
       onResize({
         size: nextSize,
@@ -710,10 +718,11 @@ function App() {
   const addPlant = (template: PlantTemplate, x = 520, y = 330) => {
     if (!canEditSelectedPlan) return
     const instanceId = `${template.id}-${crypto.randomUUID()}`
-    updatePlants((current) => [...current, { ...template, instanceId, templateId: template.id, x: x - template.size / 2, y: y - template.size / 2 }])
+    const size = clampPlantSize(template.size)
+    updatePlants((current) => [...current, { ...template, instanceId, templateId: template.id, size, x: x - size / 2, y: y - size / 2 }])
     setSelectedPlantId(instanceId)
   }
-  const updatePlant = (instanceId: string, updates: Partial<Plant>) => canEditSelectedPlan && updatePlants((current) => current.map((plant) => plant.instanceId === instanceId ? { ...plant, ...updates } : plant))
+  const updatePlant = (instanceId: string, updates: Partial<Plant>) => canEditSelectedPlan && updatePlants((current) => current.map((plant) => plant.instanceId === instanceId ? { ...plant, ...updates, ...(updates.size === undefined ? {} : { size: clampPlantSize(updates.size) }) } : plant))
   const deleteSelectedPlant = () => { if (selectedPlantId && canEditSelectedPlan) { updatePlants((current) => current.filter((plant) => plant.instanceId !== selectedPlantId)); setSelectedPlantId(null) } }
   const clearPlacedPlants = () => {
     if (!canEditSelectedPlan || selectedPlan.plants.length === 0) return
@@ -850,7 +859,7 @@ function App() {
   const toolRailButtonClass = (panel: InspectorPanel) => `grid h-10 w-10 place-items-center rounded-md border text-sm transition ${activeToolPanel === panel ? 'border-[var(--landi-primary-border)] bg-[var(--landi-primary-soft)] text-[var(--landi-primary)] shadow-sm' : 'border-transparent text-slate-500 hover:border-slate-200 hover:bg-white hover:text-slate-700'}`
   const toggleToolPanel = (panel: InspectorPanel) => setActiveToolPanel((current) => current === panel ? null : panel)
   const toggleRightPanel = () => setActiveToolPanel((current) => current ? null : 'share')
-  const selectedPlantToolbarStyle = selectedPlant ? { left: Math.min(BOARD_WIDTH - 148, Math.max(8, selectedPlant.x + selectedPlant.size / 2 - 42)), top: Math.max(8, selectedPlant.y - 44) } : undefined
+  const selectedPlantToolbarStyle = selectedPlant ? { left: Math.min(BOARD_WIDTH - 164, Math.max(8, selectedPlant.x + selectedPlant.size / 2 - 52)), top: Math.max(8, selectedPlant.y - 44) } : undefined
   const authControls = authUser ? <div className="flex h-10 items-center overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"><div className="hidden min-w-0 max-w-[190px] items-center gap-2 px-3 text-sm font-semibold text-slate-700 md:flex" title={authUser.email}><UserRound size={16} className="shrink-0 text-[var(--landi-primary)]" /><span className="truncate">{authUser.name}</span>{mode === 'edit' && <span className="shrink-0 text-xs font-semibold text-slate-400">{roleLabel}</span>}</div><button type="button" onClick={signOut} title="로그아웃" className="grid h-10 w-10 place-items-center border-l border-slate-200 text-slate-600 transition hover:bg-slate-50" aria-label="로그아웃"><LogOut size={17} /></button></div> : <button type="button" onClick={signInWithGoogle} className={`${actionButtonClass} border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50`}><LogIn size={17} />Google 로그인</button>
 
   if (mode === 'list') {
@@ -951,7 +960,7 @@ function App() {
             <div ref={boardFrameRef} className="relative mx-auto w-full max-w-[1120px] rounded-md bg-white p-1.5 shadow-[0_18px_48px_rgba(47,55,43,0.12)] md:p-2">
               <div className="relative overflow-hidden" style={{ width: Math.ceil(BOARD_WIDTH * boardScale), maxWidth: '100%', height: Math.ceil(BOARD_HEIGHT * boardScale) }}>
                 
-                <div ref={canvasRef} data-export-board="true" onClick={() => setSelectedPlantId(null)} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop} className="relative origin-top-left overflow-visible border" style={{ width: BOARD_WIDTH, height: BOARD_HEIGHT, transform: `scale(${boardScale})`, backgroundColor: '#f7f7f2', borderColor: '#d8ded4' }}>{selectedPlan.backgroundUrl && <div className="absolute inset-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `linear-gradient(rgba(255,255,255,${backgroundOverlay}), rgba(255,255,255,${backgroundOverlay})), url(${selectedPlan.backgroundUrl})`, filter: `saturate(${backgroundSaturation}%)` }} />}{!selectedPlan.backgroundUrl && <PlanBase fade={clampPercent(selectedPlan.backgroundFade ?? 62)} />}{!selectedPlan.backgroundUrl && selectedPlan.plants.length === 0 && <div className="absolute left-1/2 top-1/2 z-10 w-[min(420px,calc(100%-48px))] -translate-x-1/2 -translate-y-1/2 rounded-md border border-dashed border-slate-300 bg-white/90 px-5 py-5 text-center shadow-sm backdrop-blur-sm"><div className="mx-auto grid h-11 w-11 place-items-center rounded-md bg-[var(--landi-primary-soft)] text-[var(--landi-primary)]"><ImagePlus size={22} /></div><p className="mt-3 text-[15px] font-semibold text-slate-900">등록된 도면이 없습니다</p><p className="mt-1.5 text-[13px] leading-5 text-slate-500">도면 이미지를 업로드하면 이 영역을 기준으로 식재를 배치할 수 있습니다.</p>{canEditSelectedPlan ? <label className="landi-form-control mx-auto mt-4 inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md bg-[var(--landi-accent-copper)] px-3 text-white shadow-sm transition hover:bg-[var(--landi-accent-copper-dark)]"><ImagePlus size={16} />도면 업로드<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="sr-only" /></label> : <p className="mt-3 text-xs font-semibold text-slate-400">읽기전용 권한에서는 도면을 업로드할 수 없습니다.</p>}</div>}{selectedPlan.plants.map((plant) => <PlacedPlant key={plant.instanceId} plant={plant} selected={selectedPlantId === plant.instanceId} plantIntensity={plantIntensity} showLabel={showPlantLabels} boardScale={boardScale} readOnly={!canEditSelectedPlan} onSelect={() => setSelectedPlantId(plant.instanceId)} onMove={(updates) => updatePlant(plant.instanceId, updates)} onResize={(updates) => updatePlant(plant.instanceId, updates)} />)}{selectedPlant && canEditSelectedPlan && selectedPlantToolbarStyle && <div className="export-hidden absolute z-30 flex items-center gap-1 rounded-md border border-slate-200 bg-white/95 p-1 shadow-[0_12px_32px_rgba(15,23,42,0.18)] backdrop-blur" style={selectedPlantToolbarStyle} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}><button type="button" onClick={() => updatePlant(selectedPlant.instanceId, { size: Math.max(28, selectedPlant.size - 8) })} className="grid h-8 w-8 place-items-center rounded-md text-slate-700 hover:bg-slate-100" aria-label="선택 식물 축소"><Minus size={16} /></button><span className="min-w-[44px] px-1 text-center text-xs font-semibold text-slate-600">{Math.round(selectedPlant.size)}px</span><button type="button" onClick={() => updatePlant(selectedPlant.instanceId, { size: Math.min(180, selectedPlant.size + 8) })} className="grid h-8 w-8 place-items-center rounded-md text-slate-700 hover:bg-slate-100" aria-label="선택 식물 확대"><Plus size={16} /></button><span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" /><button type="button" onClick={deleteSelectedPlant} className="grid h-8 w-8 place-items-center rounded-md text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]" aria-label="선택 식물 삭제"><Trash2 size={16} /></button></div>}</div>
+                <div ref={canvasRef} data-export-board="true" onClick={() => setSelectedPlantId(null)} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop} className="relative origin-top-left overflow-visible border" style={{ width: BOARD_WIDTH, height: BOARD_HEIGHT, transform: `scale(${boardScale})`, backgroundColor: '#f7f7f2', borderColor: '#d8ded4' }}>{selectedPlan.backgroundUrl && <div className="absolute inset-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `linear-gradient(rgba(255,255,255,${backgroundOverlay}), rgba(255,255,255,${backgroundOverlay})), url(${selectedPlan.backgroundUrl})`, filter: `saturate(${backgroundSaturation}%)` }} />}{!selectedPlan.backgroundUrl && <PlanBase fade={clampPercent(selectedPlan.backgroundFade ?? 62)} />}{!selectedPlan.backgroundUrl && selectedPlan.plants.length === 0 && <div className="absolute left-1/2 top-1/2 z-10 w-[min(420px,calc(100%-48px))] -translate-x-1/2 -translate-y-1/2 rounded-md border border-dashed border-slate-300 bg-white/90 px-5 py-5 text-center shadow-sm backdrop-blur-sm"><div className="mx-auto grid h-11 w-11 place-items-center rounded-md bg-[var(--landi-primary-soft)] text-[var(--landi-primary)]"><ImagePlus size={22} /></div><p className="mt-3 text-[15px] font-semibold text-slate-900">등록된 도면이 없습니다</p><p className="mt-1.5 text-[13px] leading-5 text-slate-500">도면 이미지를 업로드하면 이 영역을 기준으로 식재를 배치할 수 있습니다.</p>{canEditSelectedPlan ? <label className="landi-form-control mx-auto mt-4 inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md bg-[var(--landi-accent-copper)] px-3 text-white shadow-sm transition hover:bg-[var(--landi-accent-copper-dark)]"><ImagePlus size={16} />도면 업로드<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="sr-only" /></label> : <p className="mt-3 text-xs font-semibold text-slate-400">읽기전용 권한에서는 도면을 업로드할 수 없습니다.</p>}</div>}{selectedPlan.plants.map((plant) => <PlacedPlant key={plant.instanceId} plant={plant} selected={selectedPlantId === plant.instanceId} plantIntensity={plantIntensity} showLabel={showPlantLabels} boardScale={boardScale} readOnly={!canEditSelectedPlan} onSelect={() => setSelectedPlantId(plant.instanceId)} onMove={(updates) => updatePlant(plant.instanceId, updates)} onResize={(updates) => updatePlant(plant.instanceId, updates)} />)}{selectedPlant && canEditSelectedPlan && selectedPlantToolbarStyle && <div className="export-hidden absolute z-30 flex items-center gap-1 rounded-md border border-slate-200 bg-white/95 p-1 shadow-[0_12px_32px_rgba(15,23,42,0.18)] backdrop-blur" style={selectedPlantToolbarStyle} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}><button type="button" onClick={() => updatePlant(selectedPlant.instanceId, { size: clampPlantSize(selectedPlant.size - PLANT_SIZE_STEP) })} disabled={selectedPlant.size <= PLANT_SIZE_MIN} className="grid h-8 w-8 place-items-center rounded-md text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent" aria-label="선택 식물 축소"><Minus size={16} /></button><span className="group/size relative grid min-w-[52px] px-1 text-center leading-none"><span className="text-xs font-semibold text-slate-700">{Math.round(selectedPlant.size)}px</span><span className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-40 hidden w-max max-w-[180px] -translate-x-1/2 rounded-md border border-slate-200 bg-white px-3 py-2 text-left shadow-[0_14px_32px_rgba(15,23,42,0.16)] group-hover/size:block"><span className="block text-[11px] font-semibold text-slate-800">크기 {PLANT_SIZE_MIN}-{PLANT_SIZE_MAX}px</span><span className="mt-1 block text-[11px] font-medium text-slate-500">버튼 ±{PLANT_SIZE_STEP}px · 드래그 자유</span></span></span><button type="button" onClick={() => updatePlant(selectedPlant.instanceId, { size: clampPlantSize(selectedPlant.size + PLANT_SIZE_STEP) })} disabled={selectedPlant.size >= PLANT_SIZE_MAX} className="grid h-8 w-8 place-items-center rounded-md text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent" aria-label="선택 식물 확대"><Plus size={16} /></button><span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" /><button type="button" onClick={deleteSelectedPlant} className="grid h-8 w-8 place-items-center rounded-md text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]" aria-label="선택 식물 삭제"><Trash2 size={16} /></button></div>}</div>
               </div>
             </div>
           </div>
@@ -987,6 +996,12 @@ function App() {
 }
 
 export default App
+
+
+
+
+
+
 
 
 
