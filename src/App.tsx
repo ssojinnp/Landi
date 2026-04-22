@@ -266,6 +266,7 @@ function App() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const applyingRemotePlansRef = useRef(false)
   const saveSequenceRef = useRef(0)
+  const remoteSaveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? plans[0]
@@ -347,6 +348,9 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(plans))
+  }, [plans])
+
+  useEffect(() => {
     if (applyingRemotePlansRef.current) {
       applyingRemotePlansRef.current = false
       return
@@ -355,63 +359,74 @@ function App() {
       return
     }
 
+    const supabaseClient = supabase
     const ownerPlans = plans.filter((plan) => getPlanRole(plan, authUser) === 'owner')
     const editorPlans = plans.filter((plan) => getPlanRole(plan, authUser) === 'editor')
     if (ownerPlans.length === 0 && editorPlans.length === 0) {
       return
     }
 
-    void (async () => {
-      const saveSequence = saveSequenceRef.current + 1
-      saveSequenceRef.current = saveSequence
-      if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
-      saveStatusTimerRef.current = window.setTimeout(() => {
-        if (saveSequenceRef.current === saveSequence) setSaveStatus('saving')
-      }, 700)
-      const ownerRows = ownerPlans.map((plan) => planToSharedRow(plan, authUser))
-      if (ownerRows.length > 0) {
-        const { error } = await supabase
-          .from('plans')
-          .upsert(ownerRows, { onConflict: 'id' })
-        if (error) {
-          if (saveSequenceRef.current === saveSequence) {
-            if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
-            saveStatusTimerRef.current = null
-            setSaveStatus('error')
-          }
-          setAuthError(`공유 조감도를 저장하지 못했습니다. ${error.message}`)
-          return
-        }
-      }
-
-      for (const plan of editorPlans) {
-        const row = planToSharedRow(plan, authUser)
-        const { error } = await supabase
-          .from('plans')
-          .update({
-            title: row.title,
-            data: row.data,
-            access_emails: row.access_emails,
-            members: row.members,
-            updated_at: row.updated_at,
-          })
-          .eq('id', row.id)
-        if (error) {
-          if (saveSequenceRef.current === saveSequence) {
-            if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
-            saveStatusTimerRef.current = null
-            setSaveStatus('error')
-          }
-          setAuthError(`공유 조감도를 저장하지 못했습니다. ${error.message}`)
-          return
-        }
-      }
-      if (saveSequenceRef.current === saveSequence) {
+    if (remoteSaveDebounceRef.current) window.clearTimeout(remoteSaveDebounceRef.current)
+    remoteSaveDebounceRef.current = window.setTimeout(() => {
+      void (async () => {
+        const saveSequence = saveSequenceRef.current + 1
+        saveSequenceRef.current = saveSequence
         if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
-        saveStatusTimerRef.current = null
-        setSaveStatus('saved')
+        saveStatusTimerRef.current = window.setTimeout(() => {
+          if (saveSequenceRef.current === saveSequence) setSaveStatus('saving')
+        }, 700)
+        const ownerRows = ownerPlans.map((plan) => planToSharedRow(plan, authUser))
+        if (ownerRows.length > 0) {
+          const { error } = await supabaseClient
+            .from('plans')
+            .upsert(ownerRows, { onConflict: 'id' })
+          if (error) {
+            if (saveSequenceRef.current === saveSequence) {
+              if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
+              saveStatusTimerRef.current = null
+              setSaveStatus('error')
+              setAuthError(`공유 조감도를 저장하지 못했습니다. ${error.message}`)
+            }
+            return
+          }
+        }
+
+        for (const plan of editorPlans) {
+          const row = planToSharedRow(plan, authUser)
+          const { error } = await supabaseClient
+            .from('plans')
+            .update({
+              title: row.title,
+              data: row.data,
+              access_emails: row.access_emails,
+              members: row.members,
+              updated_at: row.updated_at,
+            })
+            .eq('id', row.id)
+          if (error) {
+            if (saveSequenceRef.current === saveSequence) {
+              if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
+              saveStatusTimerRef.current = null
+              setSaveStatus('error')
+              setAuthError(`공유 조감도를 저장하지 못했습니다. ${error.message}`)
+            }
+            return
+          }
+        }
+        if (saveSequenceRef.current === saveSequence) {
+          if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
+          saveStatusTimerRef.current = null
+          setSaveStatus('saved')
+          setAuthError((current) => current.startsWith('공유 조감도를 저장하지 못했습니다.') ? '' : current)
+        }
+      })()
+    }, 900)
+    return () => {
+      if (remoteSaveDebounceRef.current) {
+        window.clearTimeout(remoteSaveDebounceRef.current)
+        remoteSaveDebounceRef.current = null
       }
-    })()
+    }
   }, [plans, authUser])
   useEffect(() => {
     const updateViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
@@ -437,6 +452,7 @@ function App() {
   }, [mode])
 
   useEffect(() => () => {
+    if (remoteSaveDebounceRef.current) window.clearTimeout(remoteSaveDebounceRef.current)
     if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
   }, [])
 
