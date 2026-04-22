@@ -38,11 +38,11 @@ async function canvasToImageBlob(canvas: HTMLCanvasElement, mimeType: string, qu
 function loadPlans(): Plan[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return [createPlan('대상지 조감도')]
+    if (!saved) return []
     const parsed = JSON.parse(saved) as Plan[]
-    return parsed.length > 0 ? parsed : [createPlan('대상지 조감도')]
+    return parsed
   } catch {
-    return [createPlan('대상지 조감도')]
+    return []
   }
 }
 
@@ -299,7 +299,7 @@ function App() {
         setAuthError(`공유 조감도를 불러오지 못했습니다. ${error.message}`)
         return
       }
-      if (data && data.length > 0) {
+      if (data) {
         applyingRemotePlansRef.current = true
         const sharedRows = data as SharedPlanRow[]
         const joinedPlanIds: string[] = []
@@ -316,7 +316,7 @@ function App() {
           }
         })
         setPlans(sharedPlans)
-        setSelectedPlanId((current) => sharedPlans.some((plan) => plan.id === current) ? current : sharedPlans[0].id)
+        setSelectedPlanId((current) => sharedPlans.some((plan) => plan.id === current) ? current : sharedPlans[0]?.id ?? '')
         if (joinedPlanIds.length > 0) {
           const { data: sessionData } = await supabaseClient.auth.getSession()
           const accessToken = sessionData.session?.access_token
@@ -594,10 +594,13 @@ function App() {
     const targetPlan = plans.find((plan) => plan.id === planId)
     if (!targetPlan || getPlanRole(targetPlan, authUser) !== 'owner') return
     const nextPlans = plans.filter((plan) => plan.id !== planId)
-    const fallback = nextPlans[0] ?? createPlan('새 조감도', authUser)
-    setPlans(nextPlans.length > 0 ? nextPlans : [fallback])
-    if (supabase && authUser) void supabase.from('plans').delete().eq('id', planId)
-    if (selectedPlanId === planId) { setSelectedPlanId(fallback.id); setSelectedPlantId(null); setMode('list') }
+    setPlans(nextPlans)
+    if (supabase && authUser) {
+      void supabase.from('plans').delete().eq('id', planId).then(({ error }) => {
+        if (error) setAuthError(`조감도를 삭제하지 못했습니다. ${error.message}`)
+      })
+    }
+    if (selectedPlanId === planId) { setSelectedPlanId(nextPlans[0]?.id ?? ''); setSelectedPlantId(null); setMode('list') }
   }
   const openPreview = (planId: string) => { setSelectedPlanId(planId); setSelectedPlantId(null); setMode('preview') }
   const openEditor = (planId: string) => { setSelectedPlanId(planId); setSelectedPlantId(null); setMode('edit') }
@@ -803,7 +806,7 @@ function App() {
   const authControls = authUser ? <div className="flex h-10 items-center overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"><div className="hidden min-w-0 max-w-[190px] items-center gap-2 px-3 text-sm font-semibold text-slate-700 md:flex" title={authUser.email}><UserRound size={16} className="shrink-0 text-[#4f8738]" /><span className="truncate">{authUser.name}</span>{mode === 'edit' && <span className="shrink-0 text-xs font-semibold text-slate-400">{roleLabel}</span>}</div><button type="button" onClick={signOut} title="로그아웃" className="grid h-10 w-10 place-items-center border-l border-slate-200 text-slate-600 transition hover:bg-slate-50" aria-label="로그아웃"><LogOut size={17} /></button></div> : <button type="button" onClick={signInWithGoogle} className={`${actionButtonClass} border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50`}><LogIn size={17} />Google 로그인</button>
 
   if (mode === 'list') {
-    return <main data-theme="light" className="landi-app min-h-screen bg-[#eceee8] px-5 py-6 text-slate-900 md:px-8"><header className="mx-auto mb-6 flex max-w-6xl flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-md bg-[#4f8738] text-white shadow-sm"><Trees size={24} /></div><div><h1 className="text-2xl font-semibold tracking-normal">Landi</h1><p className="text-sm text-slate-500">조감도 목록</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}<button type="button" onClick={createNewPlan} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Plus size={17} />새 조감도 생성</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{authError}</div>}{!isSupabaseConfigured && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">Supabase 환경 변수를 설정하면 Google 로그인과 멤버 초대가 활성화됩니다.</div>}<section className="mx-auto grid max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-3">{plans.length === 0 ? <div className="rounded-md border border-dashed border-slate-300 bg-white/80 px-5 py-12 text-center shadow-sm md:col-span-2 xl:col-span-3"><div className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-[#edf6e7] text-[#4f8738]"><Layers size={24} /></div><h2 className="mt-4 text-lg font-semibold text-slate-900">등록된 조감도가 없습니다</h2><p className="mx-auto mt-2 max-w-[360px] text-sm leading-6 text-slate-500">새 조감도를 생성한 뒤 도면을 업로드하고 식재 팔레트를 구성해보세요.</p><button type="button" onClick={createNewPlan} className={`${actionButtonClass} mx-auto mt-5 bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Plus size={17} />새 조감도 생성</button></div> : plans.map((plan) => { const cardRole = getPlanRole(plan, authUser); const canOpenEditor = cardRole === 'owner' || cardRole === 'editor'; return <article key={plan.id} className="landi-plan-card rounded-md border border-slate-200 bg-white p-4 shadow-sm"><PlanThumbnail plan={plan} /><div className="mt-4 flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-1.5 flex items-center gap-2"><h2 className="truncate text-lg font-semibold">{plan.title}</h2><span className={`shrink-0 rounded-sm px-2 py-0.5 text-[11px] font-semibold ${cardRole === 'viewer' ? 'bg-slate-100 text-slate-500' : 'bg-[#edf6e7] text-[#4f8738]'}`}>{getPlanRoleLabel(cardRole)}</span></div><p className="text-sm text-slate-500">식재 {plan.plants.length}개 · {getPlanUpdatedLabel(plan)}</p></div>{cardRole === 'owner' && <button type="button" onClick={() => deletePlan(plan.id)} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label="조감도 삭제"><Trash2 size={18} /></button>}</div><div className={`mt-4 grid gap-2 ${canOpenEditor ? 'grid-cols-2' : 'grid-cols-1'}`}><button type="button" onClick={() => openPreview(plan.id)} className={`${actionButtonClass} w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}><Eye size={17} />미리보기</button>{canOpenEditor && <button type="button" onClick={() => openEditor(plan.id)} className={`${actionButtonClass} w-full bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Pencil size={17} />편집보드</button>}</div></article> })}</section></main>
+    return <main data-theme="light" className="landi-app min-h-screen bg-[#eceee8] px-5 py-6 text-slate-900 md:px-8"><header className="mx-auto mb-6 flex max-w-6xl flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-md bg-[#4f8738] text-white shadow-sm"><Trees size={24} /></div><div><h1 className="text-2xl font-semibold tracking-normal">Landi</h1><p className="text-sm text-slate-500">조감도 목록</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}{plans.length > 0 && <button type="button" onClick={createNewPlan} className={`${actionButtonClass} bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Plus size={17} />새 조감도 생성</button>}</div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert">{authError}</div>}{!isSupabaseConfigured && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">Supabase 환경 변수를 설정하면 Google 로그인과 멤버 초대가 활성화됩니다.</div>}<section className={`mx-auto grid max-w-6xl gap-5 ${plans.length === 0 ? "min-h-[52vh] content-center pt-8 md:pt-12" : "md:grid-cols-2 xl:grid-cols-3"}`}>{plans.length === 0 ? <div className="rounded-md border border-dashed border-slate-300 bg-white/80 px-5 py-14 text-center shadow-sm md:col-span-2 xl:col-span-3"><div className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-[#edf6e7] text-[#4f8738]"><Layers size={24} /></div><h2 className="mt-4 text-lg font-semibold text-slate-900">등록된 조감도가 없습니다</h2><p className="mx-auto mt-2 max-w-[360px] text-sm leading-6 text-slate-500">새 조감도를 생성한 뒤 도면을 업로드하고 식재 팔레트를 구성해보세요.</p><button type="button" onClick={createNewPlan} className={`${actionButtonClass} mx-auto mt-5 bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Plus size={17} />새 조감도 생성</button></div> : plans.map((plan) => { const cardRole = getPlanRole(plan, authUser); const canOpenEditor = cardRole === 'owner' || cardRole === 'editor'; return <article key={plan.id} className="landi-plan-card rounded-md border border-slate-200 bg-white p-4 shadow-sm"><PlanThumbnail plan={plan} /><div className="mt-4 flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-1.5 flex items-center gap-2"><h2 className="truncate text-lg font-semibold">{plan.title}</h2><span className={`shrink-0 rounded-sm px-2 py-0.5 text-[11px] font-semibold ${cardRole === 'viewer' ? 'bg-slate-100 text-slate-500' : 'bg-[#edf6e7] text-[#4f8738]'}`}>{getPlanRoleLabel(cardRole)}</span></div><p className="text-sm text-slate-500">식재 {plan.plants.length}개 · {getPlanUpdatedLabel(plan)}</p></div>{cardRole === 'owner' && <button type="button" onClick={() => deletePlan(plan.id)} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-red-600 hover:bg-red-50" aria-label="조감도 삭제"><Trash2 size={18} /></button>}</div><div className={`mt-4 grid gap-2 ${canOpenEditor ? 'grid-cols-2' : 'grid-cols-1'}`}><button type="button" onClick={() => openPreview(plan.id)} className={`${actionButtonClass} w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}><Eye size={17} />미리보기</button>{canOpenEditor && <button type="button" onClick={() => openEditor(plan.id)} className={`${actionButtonClass} w-full bg-[#4f8738] text-white hover:bg-[#3f6f2d]`}><Pencil size={17} />편집보드</button>}</div></article> })}</section></main>
   }
 
   if (mode === 'preview' && selectedPlan) {
@@ -930,6 +933,8 @@ function App() {
 }
 
 export default App
+
+
 
 
 
