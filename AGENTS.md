@@ -16,6 +16,7 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - 식재 팔레트 등록/수정/삭제
 - 도면 이미지 업로드
 - 식재 배치/이동/크기 조절
+- 식재 관리
 - 수량 집계
 - 이미지 내보내기
 - 공유/권한 관리
@@ -116,19 +117,20 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 
 ### 1) 톤 & 서페이스
 
-- 앱 배경: `#eceee8`
-- 패널 배경: `#fbfbf8`
+- 앱 배경: `var(--landi-bg)` (`#eceee8`)
+- 패널 배경: `var(--landi-panel)` (`#fbfbf8`)
 - 카드/입력 배경: `bg-white`
-- 보드 배경: `#f7f7f2`
+- 보드 배경: `var(--landi-board)` (`#f7f7f2`)
 - 기본 텍스트: `text-slate-900`
 - 보조 텍스트: `text-slate-500`
-- 경계선: `border-slate-200`, 보드 경계는 `#d8ded4`
+- 경계선: `border-slate-200`, 보드 경계는 `var(--landi-board-border)` (`#d8ded4`)
 
 브랜드 컬러는 아래 값을 유지한다.
 
-- Primary green: `#4f8738`
-- Hover green: `#3f6f2d`
-- Soft green background: `#edf6e7`
+- Primary green: `var(--landi-primary)` (`#4f8738`)
+- Hover green: `var(--landi-primary-dark)` (`#3f6f2d`)
+- Soft green background: `var(--landi-primary-soft)` (`#edf6e7`)
+- Primary green border: `var(--landi-primary-border)` (`#9fbd86`)
 - Selection blue: `#2563eb`
 - Accent copper: `#B66A3C`
 - Accent copper dark: `#7A3F22`
@@ -141,7 +143,8 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - 초록 일변도로 화면이 단조로워지는 것을 피하기 위해 Copper 계열을 보조 포인트로 사용한다.
 - Green은 생성, 등록, 활성 식재, 브랜드 신호에 사용한다.
 - Copper는 공유, 권한, 소유자 상태, 메타 정보, 빈 상태 보조 강조에만 제한적으로 사용한다.
-- 삭제/오류는 red 계열을 유지하고 Copper와 섞지 않는다.
+- 삭제/오류는 Landi danger red 토큰을 사용하고 Copper와 섞지 않는다. 기본 Tailwind `red-600`처럼 채도가 강한 빨강을 직접 쓰지 않는다.
+- Warning은 저장 중, 설정 필요, 주의 안내처럼 사용자가 확인해야 하지만 파괴적이지 않은 상태에만 사용한다. 기본 Tailwind `amber-*`를 직접 쓰지 않고 Landi warning 토큰을 사용한다.
 - Blue는 보드 선택 outline처럼 조작 정확성이 필요한 곳에만 제한적으로 사용한다.
 - Purple/violet 계열 포인트나 보라 그라데이션은 Landi의 조경/현장 문서 톤과 맞지 않으므로 사용하지 않는다.
 
@@ -157,18 +160,19 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - 데스크톱에서는 `lg:flex-row` 기반 3영역 편집 UI를 유지한다.
 - 모바일/태블릿에서는 패널 접기와 가로모드 안내를 통해 보드 편집 안정성을 확보한다.
 - 좌측 팔레트는 접힘 상태를 지원해야 한다.
-- 오른쪽 도구 패널은 공유, 표현 설정, 수량 집계를 탭처럼 전환한다.
+- 오른쪽 도구 패널은 공유, 보드 설정, 수량 집계를 탭처럼 전환한다.
+- 보드 설정은 도면 표현값과 식재 레이어 관리 기능을 함께 담고, 내부에서 `도면`, `식재`, `위험 작업` 섹션으로 나눈다. 기능이 적은 독립 탭을 늘려 빈 패널처럼 보이게 하지 않는다.
 - 우측 도구 패널의 접기/펼치기 액션은 패널 내부 헤더가 아니라 우측 미니 레일에 포함한다. 패널을 닫아도 다시 여는 액션이 같은 위치에 남아야 한다.
 - 우측 패널 접기/펼치기 아이콘은 우측 패널 기준의 방향을 사용한다. 닫힌 상태의 펼치기는 `PanelRightOpen`, 열린 상태의 접기는 `PanelRightClose`를 우선 사용한다.
 - 캔버스는 항상 보드 비율을 유지하고, 스케일 조정 시 식재 좌표가 깨지지 않아야 한다.
 
 ### 3) 패널 / 카드
 
-- 기본 패널: `border border-slate-200 bg-[#fbfbf8]`
+- 기본 패널: `border border-slate-200 bg-[var(--landi-panel)]`
 - 내부 카드: `rounded-md border border-slate-200 bg-white shadow-sm`
 - 반복 아이템: `rounded-md bg-white/80 hover:bg-white hover:shadow-sm`
 - 패널 제목: `text-sm font-semibold text-slate-700`
-- 섹션 라벨: `text-xs font-semibold uppercase tracking-normal text-slate-500`
+- 섹션 라벨: `text-[11px] font-semibold uppercase tracking-wide text-slate-400`
 - 빈 상태는 `rounded-md border border-dashed border-slate-300 bg-white/80` 톤을 우선 사용한다.
 - 목록 빈 상태는 사용자가 다음 행동을 바로 할 수 있도록 주요 CTA를 함께 제공한다. 예: `등록된 조감도가 없습니다` + `새 조감도 생성`.
 - 편집보드에서 도면이 없는 최초 상태는 보드 중앙에 도면 업로드 안내를 제공한다. 편집 권한이 있으면 `도면 업로드` CTA를 함께 노출하고, 읽기전용이면 업로드 불가 안내만 표시한다.
@@ -183,13 +187,14 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
   - `line-height: 1`
   - `font-weight: 600`
   - 아이콘 크기 `17px`
-- 주요 액션은 `bg-[#4f8738] text-white hover:bg-[#3f6f2d]`
+- 주요 액션은 `bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`
 - 보조 액션은 `border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`
-- 위험 액션은 `text-red-600 hover:bg-red-50`
+- 위험 액션은 `text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]`
 - Green primary는 생성, 등록, 식재, 내보내기처럼 결과를 만드는 주요 액션에 사용한다.
 - Copper primary는 도면 업로드, 공유 초대, 권한/소유자 관련 액션처럼 프로젝트 설정/협업 맥락에 사용한다.
 - White/slate 버튼은 미리보기, 목록 이동, 접기/펼치기, 취소 등 탐색/보조 액션에 사용한다.
-- Red는 삭제/오류에만 사용한다.
+- Danger는 삭제/오류에만 사용한다.
+- Warning은 저장 중, 환경 설정 필요, 권한 안내처럼 사용자의 주의가 필요한 비파괴 상태에만 사용한다.
 - 아이콘 전용 버튼은 `grid h-8~10 w-8~10 place-items-center rounded-md` 패턴을 우선 사용한다.
 - 버튼 텍스트와 아이콘이 세로 중앙에 맞지 않으면 높이, line-height, icon size를 함께 조정한다.
 
@@ -204,7 +209,7 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - placeholder도 입력값과 같은 크기 기준을 사용한다.
 - 입력, select, placeholder의 폰트 크기가 서로 달라 보이면 안 된다.
 - 팔레트 등록/수정 폼은 좁은 패널 안에서 안정적으로 보이도록 `h-9`, `px-2.5`, `rounded-md`를 유지한다.
-- 에러 메시지는 `text-xs font-semibold text-red-600`을 사용한다.
+- 에러 메시지는 `text-xs font-semibold text-[var(--landi-danger)]`을 사용한다.
 - 필수 입력 검증은 사용자 행동 직후 명확히 보여준다.
 
 ### 6) 식재 팔레트
@@ -214,6 +219,10 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - 식재 아이템은 심볼, 식재명, 라벨을 함께 보여준다.
 - 식재명은 `text-sm font-semibold leading-5`
 - 식재 라벨/학명은 `.botanical-name text-xs leading-4`
+- 식재명/라벨처럼 사용자가 입력하는 텍스트는 길어질 수 있으므로 카드, 클릭 영역, 텍스트 래퍼에 `min-w-0`을 두고 주 텍스트는 `truncate`와 `title`을 함께 사용한다. 긴 텍스트가 수정/삭제 액션을 밀어내면 안 된다.
+- 좌측 팔레트와 우측 수량 집계처럼 반복 카드 안에서 긴 식재명/라벨을 잘라야 하는 경우, 카드 hover 시 같은 톤의 작은 tooltip으로 전체 이름과 라벨을 보여준다. tooltip은 `rounded-md border border-slate-200 bg-white px-3 py-2 text-left shadow-[0_14px_32px_rgba(15,23,42,0.16)]` 계열을 사용한다.
+- 도면 위 식재 hover/상시 라벨은 너무 짧은 고정 폭을 쓰지 않는다. 기본은 `max-w-[180px]` 수준으로 두고, 긴 이름은 `.landi-plant-label-text`의 ellipsis와 `title`로 보완한다.
+- 도면 하단에 가까운 식재 라벨은 보드 밖으로 내려가지 않도록 위쪽에 표시한다. 라벨 위치 계산은 편집 보드와 미리보기/썸네일이 같은 컴포넌트를 사용해 일관되게 처리한다.
 - 팔레트 항목은 클릭으로 배치 가능해야 하며, 드래그로 보드에 놓을 수 있어야 한다.
 - 수정/삭제 액션은 항목 우측에 작게 배치하고 hover 시 명확히 보여준다.
 
@@ -222,12 +231,12 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - 보드 기본 크기는 `BOARD_WIDTH`, `BOARD_HEIGHT` 값을 기준으로 한다.
 - 보드는 배경 이미지가 없을 때 기본 조경 베이스를 렌더링한다.
 - 업로드된 도면 이미지는 비율을 유지하고 contain 방식에 가깝게 표시한다.
-- 표현 설정의 퍼센트 컨트롤은 모두 `0~100%` 범위를 사용한다. 100%를 초과하는 값은 신규 UI에서 만들지 않는다.
+- 보드 설정의 퍼센트 컨트롤은 모두 `0~100%` 범위를 사용한다. 100%를 초과하는 값은 신규 UI에서 만들지 않는다.
 - 도면 밝기 조절은 `backgroundFade` 값을 사용한다.
 - 도면 채도 조절은 `backgroundSaturation` 값을 사용하며 기본값은 `100`이다.
 - 편집보드, 조감도 목록 썸네일, 미리보기는 같은 도면 색상 처리 기준을 사용한다. 썸네일/미리보기에서 별도의 `grayscale` 또는 `saturate` 필터를 추가해 편집보드와 다르게 보이게 하지 않는다.
 - 식재 진하기 조절은 `plantIntensity` 값을 사용한다.
-- 식재명 상시 표시 여부는 `showPlantLabels` 값을 사용한다. 기본값은 `false`이며, 꺼져 있을 때는 hover 라벨만 표시하고 내보내기에서는 제외한다.
+- 식재명 상시 표시 여부는 `showPlantLabels` 값을 사용한다. 기본값은 `false`이며, 꺼져 있을 때는 hover 라벨만 표시하고 내보내기에서는 제외한다. 해당 UI는 우측 `보드 설정` 탭의 `식재` 섹션에 둔다.
 - `showPlantLabels`가 켜져 있을 때는 식재명 라벨을 보드 위에 상시 표시하고 이미지 내보내기 결과에도 포함한다. export에 포함되는 라벨은 html2canvas 호환을 위해 Tailwind 투명 색상/ring 대신 안전한 inline RGB/RGBA 스타일을 우선 사용한다.
 - 식재명 라벨은 화면 표시와 이미지 내보내기의 baseline이 다를 수 있으므로 텍스트 span에 `.landi-plant-label-text`를 사용한다. export baseline 보정은 `.landi-exporting .landi-plant-label-text`에서만 적용한다.
 - 식재명 상시 라벨과 hover 전용 라벨은 토글 시 배경색이 반전되어 깜빡이지 않도록 별도 DOM으로 분리한다.
@@ -249,6 +258,19 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - 수량 집계는 팔레트 항목 기준으로 보여준다.
 - 식재명, 라벨, 수량이 한눈에 보여야 한다.
 - 수량 숫자는 `text-lg font-semibold text-slate-900` 기준을 유지한다.
+- 수량 집계 항목은 좁은 우측 패널에서 2컬럼으로 나누지 않는다. `grid-cols-1`을 유지하고, 긴 식재명/라벨을 고려해 텍스트 영역은 `min-w-0 overflow-hidden`, 수량 숫자는 `shrink-0`으로 보호한다.
+- 수량 집계 tooltip에는 식재명, 라벨, 수량을 함께 보여줘 말줄임 상태에서도 항목을 정확히 확인할 수 있게 한다.
+
+### 9-1) 보드 설정
+
+- 보드 설정은 우측 도구 패널의 독립 탭으로 제공한다.
+- `도면 밝기`, `도면 채도`처럼 배경 도면의 시각값은 `도면` 섹션에 둔다.
+- `식재 진하기`, `식재명 표시`처럼 도면 위 식재 레이어의 표시 여부와 강도를 다루는 UI는 `식재` 섹션에 둔다.
+- 섹션명이 이미 맥락을 설명하면 내부 컨트롤 라벨에서 같은 단어를 반복하지 않는다. 예: `도면` 섹션 안에서는 `밝기`, `채도`, `식재` 섹션 안에서는 `진하기`.
+- 좌우 패널 안의 섹션명은 `text-[11px] font-semibold uppercase tracking-wide text-slate-400`처럼 낮은 위계로 통일하고, 실제 컨트롤 라벨은 `text-[13px] font-semibold text-slate-700`로 더 명확하게 구분한다.
+- `식재 모두 삭제`처럼 배치된 식재 데이터에 영향을 주는 위험 기능은 `위험 작업` 같은 추상 타이틀 대신 `배치 식재 삭제`처럼 기능명을 명확히 드러내는 섹션명으로 둔다.
+- 수량 집계는 조회 전용으로 유지하고, 삭제/초기화 같은 편집 액션을 수량 집계 패널에 섞지 않는다.
+- 캔버스 위 floating action은 도면 조작과 내보내기를 방해할 수 있으므로 우측 패널에 둘 수 있는 기능은 우측 패널에 우선 배치한다.
 
 ### 10) 공유 / 권한
 
@@ -282,17 +304,26 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 
 | 용도 | 값 | Tailwind / 사용 예시 |
 | --- | --- | --- |
-| Primary green | `#4f8738` | `bg-[#4f8738]`, `text-[#4f8738]` |
-| Hover green | `#3f6f2d` | `hover:bg-[#3f6f2d]` |
-| Soft green | `#edf6e7` | `bg-[#edf6e7]` |
+| Primary green | `#4F8738` | `var(--landi-primary)` |
+| Hover green | `#3F6F2D` | `var(--landi-primary-dark)` |
+| Soft green | `#EDF6E7` | `var(--landi-primary-soft)` |
+| Primary green border | `#9FBD86` | `var(--landi-primary-border)` |
 | Accent copper | `#B66A3C` | `var(--landi-accent-copper)` |
 | Accent copper dark | `#7A3F22` | `var(--landi-accent-copper-dark)` |
 | Accent copper soft | `#F7E9DF` | `var(--landi-accent-copper-soft)` |
 | Accent copper border | `#E8D8CC` | `var(--landi-accent-copper-border)` |
-| App background | `#eceee8` | `bg-[#eceee8]` |
-| Panel background | `#fbfbf8` | `bg-[#fbfbf8]` |
-| Board background | `#f7f7f2` | `bg-[#f7f7f2]` |
-| Board border | `#d8ded4` | `border-[#d8ded4]` |
+| Danger | `#8F2F3A` | `var(--landi-danger)` |
+| Danger dark | `#6F2530` | `var(--landi-danger-dark)` |
+| Danger soft | `#F9E8EB` | `var(--landi-danger-soft)` |
+| Danger border | `#E7C4CA` | `var(--landi-danger-border)` |
+| Warning | `#9A6A24` | `var(--landi-warning)` |
+| Warning dark | `#6F4818` | `var(--landi-warning-dark)` |
+| Warning soft | `#FFF4DD` | `var(--landi-warning-soft)` |
+| Warning border | `#EAD3A5` | `var(--landi-warning-border)` |
+| App background | `#ECEEE8` | `var(--landi-bg)` |
+| Panel background | `#FBFBF8` | `var(--landi-panel)` |
+| Board background | `#F7F7F2` | `var(--landi-board)` |
+| Board border | `#D8DED4` | `var(--landi-board-border)` |
 | Selection blue | `#2563eb` | outline, resize handle |
 | Text primary | slate-900 | `text-slate-900` |
 | Text secondary | slate-500 | `text-slate-500` |
@@ -319,9 +350,9 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 
 | 계층 | 용도 | 기준 스타일 | 예시 |
 | --- | --- | --- | --- |
-| 패널 제목 | 좌측/우측 도구 패널의 현재 영역명 | `text-sm font-semibold text-slate-700` | `식재 팔레트`, `공유`, `표현 설정`, `수량 집계` |
+| 패널 제목 | 좌측/우측 도구 패널의 현재 영역명 | `text-sm font-semibold text-slate-700` | `식재 팔레트`, `공유`, `보드 설정`, `수량 집계` |
 | 카드 내부 제목 | 패널 안 카드의 하위 제목 | `text-[13px] font-semibold leading-5 text-slate-800` | `프로젝트 공유` |
-| 섹션 라벨 | 카드나 리스트 안의 작은 분류 라벨 | `text-xs font-semibold text-slate-500` | `멤버`, `소유자`, 보조 카운트 라벨 |
+| 섹션 라벨 | 카드나 리스트 안의 작은 분류 라벨 | `text-[11px] font-semibold uppercase tracking-wide text-slate-400` | `도면`, `식재`, `멤버`, 식재 그룹명, 보조 카운트 라벨 |
 | 폼 트리거/폼 제목 | 좁은 패널 안에서 폼을 열고 닫는 액션성 제목 | `.landi-form-trigger` 또는 `text-[13px] leading-[18px] font-semibold` | `식재 타입 등록`, `팔레트 등록` |
 | 식재명/목록 주 식별자 | 반복 카드에서 항목을 구분하는 가장 중요한 이름 | `text-sm font-semibold leading-5` | 식재 팔레트 항목명, 수량 집계 식재명 |
 | 식재 학명/설명 | 식재명 아래 보조 설명 | `.botanical-name text-xs leading-4 text-slate-500` | 식재 라벨, 학명, 메모 |
@@ -335,6 +366,7 @@ Landi는 조경 전문가가 복잡한 3D 툴 없이 2D 도면 위에 식재(나
 - `식재 팔레트`와 `공유`는 서로 같은 패널 제목 계층이다.
 - `프로젝트 공유`는 `공유` 패널 안의 카드 내부 제목이므로 패널 제목보다 작아야 한다.
 - `식재 타입 등록`은 식재명과 같은 주 식별자가 아니라 폼 트리거이므로 13px 기준을 사용한다.
+- 좌측 식재 그룹명과 우측 패널의 `도면`, `식재`, `멤버`는 같은 섹션 라벨 계층으로 통일한다.
 - `초대 대기`, `참여 완료`는 멤버 이름이 아니라 상태 표시이므로 11~12px 보조 상태로 표현한다.
 - 식재 팔레트 항목명과 수량 집계 식재명은 사용자가 항목을 식별하는 주 정보이므로 14px을 허용한다.
 - 같은 패널 안에서 `text-sm`, `text-[13px]`, `text-xs`가 섞일 때는 크기가 아니라 정보 계층이 먼저 맞는지 확인한다.

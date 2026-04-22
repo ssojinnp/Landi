@@ -4,10 +4,26 @@
   font-family:
     "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", Inter, ui-sans-serif,
     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --landi-primary: #4f8738;
+  --landi-primary-dark: #3f6f2d;
+  --landi-primary-soft: #edf6e7;
+  --landi-primary-border: #9fbd86;
   --landi-accent-copper: #b66a3c;
   --landi-accent-copper-dark: #7a3f22;
   --landi-accent-copper-soft: #f7e9df;
   --landi-accent-copper-border: #e8d8cc;
+  --landi-danger: #8f2f3a;
+  --landi-danger-dark: #6f2530;
+  --landi-danger-soft: #f9e8eb;
+  --landi-danger-border: #e7c4ca;
+  --landi-warning: #9a6a24;
+  --landi-warning-dark: #6f4818;
+  --landi-warning-soft: #fff4dd;
+  --landi-warning-border: #ead3a5;
+  --landi-bg: #eceee8;
+  --landi-panel: #fbfbf8;
+  --landi-board: #f7f7f2;
+  --landi-board-border: #d8ded4;
   color: #172019;
   background: #eef2ee;
   font-synthesis: none;
@@ -125,7 +141,7 @@ input::placeholder {
 .landi-range {
   width: 100%;
   height: 18px;
-  accent-color: #4f8738;
+  accent-color: var(--landi-primary);
 }
 
 .landi-range::-webkit-slider-runnable-track {
@@ -140,13 +156,17 @@ input::placeholder {
   width: 16px;
   border-radius: 999px;
   border: 2px solid #fff;
-  background: #4f8738;
+  background: var(--landi-primary);
   box-shadow: 0 2px 7px rgba(38, 63, 31, 0.22);
   appearance: none;
 }
 
 .landi-app[data-theme='dark'] {
-  background: #11170f;
+  --landi-bg: #11170f;
+  --landi-panel: #182116;
+  --landi-board: #141c12;
+  --landi-board-border: #2d392a;
+  background: var(--landi-bg);
   color: #e7ece3;
 }
 
@@ -261,7 +281,11 @@ input::placeholder {
 }
 
 .landi-plant-label-text {
-  display: inline-block;
+  display: block;
+  max-width: 164px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   line-height: 18px;
 }
 
