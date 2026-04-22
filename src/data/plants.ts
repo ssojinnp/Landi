@@ -22,16 +22,20 @@ export const flowerColorOptions = [
 
 export const plantToneOptions: Partial<Record<PlantKind, PlantColors[]>> = {
   deciduous: [
-    { primary: '#5f913f', secondary: '#91bd64', accent: '#d7e6a2', stroke: '#243f1f' },
-    { primary: '#6fa54d', secondary: '#a9cf76', accent: '#e4edb8', stroke: '#2f4727' },
-    { primary: '#4f7f4a', secondary: '#83b76c', accent: '#cce5af', stroke: '#273f2b' },
-    { primary: '#7f9841', secondary: '#bcc86f', accent: '#ece4a2', stroke: '#454223' },
+    { primary: '#4f8738', secondary: '#8fc15f', accent: '#d7e89a', stroke: '#233c1f' },
+    { primary: '#6fa83f', secondary: '#b6d86c', accent: '#eef0a8', stroke: '#3d4d1f' },
+    { primary: '#3f7f59', secondary: '#76b985', accent: '#c7e6bb', stroke: '#264434' },
+    { primary: '#7f9140', secondary: '#c2c55f', accent: '#f0df92', stroke: '#4c4724' },
+    { primary: '#2f6f4b', secondary: '#68a96f', accent: '#bfe1a2', stroke: '#1f3d2c' },
+    { primary: '#86a84a', secondary: '#cbdc73', accent: '#f2e8a6', stroke: '#4a5128' },
   ],
   groundcover: [
-    { primary: '#5f985c', secondary: '#98c474', accent: '#d8ecc1', stroke: '#355233' },
-    { primary: '#6f9f77', secondary: '#a6ccb0', accent: '#def0d8', stroke: '#345840' },
-    { primary: '#7c9860', secondary: '#b7c97f', accent: '#eef1c8', stroke: '#435235' },
-    { primary: '#4f9477', secondary: '#8fc6a9', accent: '#d6efe7', stroke: '#2f5549' },
+    { primary: '#5f985c', secondary: '#9acb66', accent: '#d9ed9a', stroke: '#355233' },
+    { primary: '#4f9477', secondary: '#89c9a6', accent: '#d2efe4', stroke: '#2f5549' },
+    { primary: '#7c9860', secondary: '#bfcc66', accent: '#edf0a8', stroke: '#435235' },
+    { primary: '#3f8b78', secondary: '#76c4b0', accent: '#c9eee6', stroke: '#285449' },
+    { primary: '#6f9f45', secondary: '#b2d85f', accent: '#e7ef9a', stroke: '#3a5128' },
+    { primary: '#528f9b', secondary: '#8fcad0', accent: '#d6f0ef', stroke: '#2f5660' },
   ],
 }
 
