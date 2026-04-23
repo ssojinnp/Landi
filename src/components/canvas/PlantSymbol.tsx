@@ -112,20 +112,24 @@ export function PlantSymbol({ plant, selected = false }: PlantSymbolProps) {
 
   if (kind === 'shrub') {
     const clumps = [
-      [0, -0.14, 0.36],
-      [-0.34, 0.02, 0.3],
-      [0.34, 0.02, 0.3],
-      [-0.18, 0.3, 0.28],
-      [0.2, 0.3, 0.28],
+      [-0.44, 0.02, 0.28],
+      [-0.2, -0.12, 0.34],
+      [0.08, -0.08, 0.36],
+      [0.36, 0.02, 0.3],
+      [-0.34, 0.26, 0.26],
+      [0.24, 0.28, 0.28],
     ]
     return (
       <svg width={boxWidth} height={boxHeight} viewBox={`0 0 ${boxWidth} ${boxHeight}`} className="block overflow-visible" aria-hidden="true">
-        <ellipse cx={center} cy={center + radius * 0.08} rx={radius * 0.92} ry={radius * 0.68} fill={colors.primary} opacity="0.32" />
-        {clumps.map(([x, y, r], index) => <circle key={index} cx={center + radius * x} cy={center + radius * y} r={radius * r} fill={index % 2 === 0 ? colors.primary : colors.secondary} stroke={colors.stroke} strokeWidth="1" opacity="0.76" />)}
-        {Array.from({ length: 9 }).map((_, index) => {
-          const angle = (Math.PI * 2 * index) / 9
-          return <circle key={index} cx={center + Math.cos(angle) * radius * 0.46} cy={center + Math.sin(angle) * radius * 0.32} r={radius * 0.055} fill={colors.accent} opacity="0.75" />
+        <ellipse cx={center} cy={center + radius * 0.2} rx={radius * 0.98} ry={radius * 0.52} fill={colors.primary} opacity="0.2" />
+        <path d={`M ${center - radius * 0.74} ${center + radius * 0.34} C ${center - radius * 0.42} ${center + radius * 0.64} ${center + radius * 0.42} ${center + radius * 0.64} ${center + radius * 0.76} ${center + radius * 0.3}`} fill="none" stroke={colors.stroke} strokeWidth={Math.max(1.4, radius * 0.055)} strokeLinecap="round" opacity="0.26" />
+        {clumps.map(([x, y, r], index) => <ellipse key={index} cx={center + radius * x} cy={center + radius * y} rx={radius * r * 1.08} ry={radius * r * 0.78} fill={index % 2 === 0 ? colors.primary : colors.secondary} stroke={colors.stroke} strokeWidth="1" opacity="0.78" />)}
+        {Array.from({ length: 12 }).map((_, index) => {
+          const x = center + radius * (-0.58 + index * 0.105)
+          const y = center + radius * (0.02 + (index % 3) * 0.1)
+          return <circle key={index} cx={x} cy={y} r={radius * 0.05} fill={colors.accent} opacity="0.76" />
         })}
+        <ellipse cx={center} cy={center + radius * 0.12} rx={radius * 0.86} ry={radius * 0.48} fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="1.2" strokeDasharray="2 4" />
         {selected && <SelectionRing center={center} radius={radius} />}
       </svg>
     )

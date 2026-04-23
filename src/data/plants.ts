@@ -29,6 +29,12 @@ export const plantToneOptions: Partial<Record<PlantKind, PlantColors[]>> = {
     { primary: '#2f6f4b', secondary: '#68a96f', accent: '#bfe1a2', stroke: '#1f3d2c' },
     { primary: '#86a84a', secondary: '#cbdc73', accent: '#f2e8a6', stroke: '#4a5128' },
   ],
+  shrub: [
+    { primary: '#568d4a', secondary: '#86b76a', accent: '#d5e9a8', stroke: '#263d25' },
+    { primary: '#4f7f5a', secondary: '#7eb077', accent: '#cde4a5', stroke: '#2d422b' },
+    { primary: '#6f8f45', secondary: '#a6bd63', accent: '#e2e59b', stroke: '#3f4825' },
+    { primary: '#477a5d', secondary: '#74aa7d', accent: '#c5dfb0', stroke: '#2b4536' },
+  ],
   groundcover: [
     { primary: '#5f985c', secondary: '#9acb66', accent: '#d9ed9a', stroke: '#355233' },
     { primary: '#4f9477', secondary: '#89c9a6', accent: '#d2efe4', stroke: '#2f5549' },
