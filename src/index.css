@@ -98,6 +98,12 @@ input::placeholder {
   font-weight: 600;
 }
 
+.landi-type-toggle {
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 700;
+}
+
 .landi-form-trigger {
   font-size: 13px;
   line-height: 18px;
