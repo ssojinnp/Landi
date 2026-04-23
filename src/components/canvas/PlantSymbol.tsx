@@ -89,22 +89,34 @@ export function PlantSymbol({ plant, selected = false }: PlantSymbolProps) {
   }
 
   if (kind === 'evergreen') {
-    const branchCount = variant === 0 ? 9 : variant === 1 ? 11 : 13
+    const branchCount = variant === 0 ? 12 : variant === 1 ? 14 : 16
+    const canopyLobes = variant === 0
+      ? [[0, -0.2, 0.42, 0.28], [-0.32, 0.04, 0.34, 0.24], [0.28, 0.02, 0.38, 0.25], [-0.12, 0.28, 0.36, 0.23], [0.2, 0.3, 0.3, 0.2]]
+      : variant === 1
+        ? [[-0.2, -0.26, 0.36, 0.25], [0.22, -0.2, 0.4, 0.27], [-0.42, 0.08, 0.3, 0.22], [0.38, 0.12, 0.34, 0.23], [0.02, 0.28, 0.38, 0.24]]
+        : [[0, -0.32, 0.34, 0.23], [-0.34, -0.06, 0.32, 0.23], [0.34, -0.04, 0.34, 0.23], [-0.18, 0.24, 0.34, 0.22], [0.22, 0.26, 0.32, 0.21], [0.02, 0.02, 0.3, 0.2]]
     return (
       <svg width={boxWidth} height={boxHeight} viewBox={`0 0 ${boxWidth} ${boxHeight}`} className="block overflow-visible" aria-hidden="true">
-        <circle cx={center} cy={center} r={radius * 0.9} fill={colors.primary} opacity="0.58" stroke={colors.stroke} strokeWidth="1.5" />
+        <path d={`M ${center - radius * 0.82} ${center + radius * 0.2} C ${center - radius * 0.58} ${center - radius * 0.62} ${center + radius * 0.6} ${center - radius * 0.66} ${center + radius * 0.82} ${center + radius * 0.18} C ${center + radius * 0.52} ${center + radius * 0.72} ${center - radius * 0.48} ${center + radius * 0.76} ${center - radius * 0.82} ${center + radius * 0.2} Z`} fill={colors.primary} opacity="0.22" />
         {Array.from({ length: branchCount }).map((_, index) => {
-          const angle = (Math.PI * 2 * index) / branchCount
-          const outer = radius * (0.7 + (index % 3) * 0.06)
-          const inner = radius * 0.16
-          const x1 = center + Math.cos(angle) * inner
-          const y1 = center + Math.sin(angle) * inner
+          const angle = (Math.PI * 2 * index) / branchCount + (variant * Math.PI) / 18
+          const outer = radius * (0.58 + (index % 4) * 0.07)
           const x2 = center + Math.cos(angle) * outer
           const y2 = center + Math.sin(angle) * outer
-          return <path key={index} d={`M ${x1} ${y1} L ${x2} ${y2}`} stroke={index % 2 === 0 ? colors.secondary : colors.accent} strokeWidth={Math.max(2, radius * 0.08)} strokeLinecap="round" opacity="0.78" />
+          const sideAngle = angle + Math.PI / 2
+          const width = radius * (0.1 + (index % 2) * 0.025)
+          const p1 = `${center + Math.cos(angle) * radius * 0.12},${center + Math.sin(angle) * radius * 0.12}`
+          const p2 = `${x2 + Math.cos(sideAngle) * width},${y2 + Math.sin(sideAngle) * width}`
+          const p3 = `${x2 - Math.cos(sideAngle) * width},${y2 - Math.sin(sideAngle) * width}`
+          return <polygon key={index} points={`${p1} ${p2} ${p3}`} fill={index % 3 === 0 ? colors.accent : index % 2 === 0 ? colors.secondary : colors.primary} stroke={colors.stroke} strokeWidth="0.6" opacity="0.72" />
         })}
-        <circle cx={center} cy={center} r={radius * 0.16} fill={colors.stroke} opacity="0.42" />
-        <circle cx={center} cy={center} r={radius * 0.54} fill="none" stroke="rgba(255,255,255,0.42)" strokeWidth="1.2" strokeDasharray="2 5" />
+        {canopyLobes.map(([x, y, rx, ry], index) => <ellipse key={index} cx={center + radius * x} cy={center + radius * y} rx={radius * rx} ry={radius * ry} fill={index % 2 === 0 ? colors.primary : colors.secondary} stroke={colors.stroke} strokeWidth="1" opacity="0.68" transform={`rotate(${index % 2 === 0 ? -18 : 16} ${center + radius * x} ${center + radius * y})`} />)}
+        {Array.from({ length: 7 }).map((_, index) => {
+          const angle = (Math.PI * 2 * index) / 7 + Math.PI / 9
+          return <path key={index} d={`M ${center} ${center} Q ${center + Math.cos(angle) * radius * 0.24} ${center + Math.sin(angle) * radius * 0.12} ${center + Math.cos(angle) * radius * 0.48} ${center + Math.sin(angle) * radius * 0.36}`} stroke={colors.stroke} strokeWidth={Math.max(1, radius * 0.045)} strokeLinecap="round" fill="none" opacity="0.42" />
+        })}
+        <circle cx={center} cy={center} r={radius * 0.13} fill={colors.stroke} opacity="0.38" />
+        <path d={`M ${center - radius * 0.44} ${center + radius * 0.12} C ${center - radius * 0.18} ${center + radius * 0.34} ${center + radius * 0.24} ${center + radius * 0.34} ${center + radius * 0.48} ${center + radius * 0.1}`} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="2 4" />
         {selected && <SelectionRing center={center} radius={radius} />}
       </svg>
     )
