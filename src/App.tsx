@@ -15,6 +15,56 @@ const PLANT_SIZE_STEP = 8
 const PLANT_SYMBOL_OFFSET_X = 4
 const PLANT_SYMBOL_OFFSET_Y = 3
 const EMPTY_PLAN_TITLE = '등록된 도면이 없습니다'
+const LEGACY_LIRIOPE_IDS = new Set(['liriope'])
+const LEGACY_LIRIOPE_NAMES = new Set(['맥문동'])
+const KOCHIA_TEMPLATE = defaultPalette.find((template) => template.id === 'kochia') ?? defaultPalette[3]
+
+function isLegacyLiriopeTemplate(template: Pick<PlantTemplate, 'id' | 'name'>) {
+  return LEGACY_LIRIOPE_IDS.has(template.id) || LEGACY_LIRIOPE_NAMES.has(template.name.trim())
+}
+
+function migrateTemplate(template: PlantTemplate): PlantTemplate {
+  if (!isLegacyLiriopeTemplate(template)) return template
+  return {
+    ...template,
+    id: KOCHIA_TEMPLATE.id,
+    kind: KOCHIA_TEMPLATE.kind,
+    category: KOCHIA_TEMPLATE.category,
+    name: KOCHIA_TEMPLATE.name,
+    label: KOCHIA_TEMPLATE.label,
+    size: KOCHIA_TEMPLATE.size,
+    colors: KOCHIA_TEMPLATE.colors,
+  }
+}
+
+function migratePlant(plant: Plant): Plant {
+  if (!isLegacyLiriopeTemplate(plant) && !LEGACY_LIRIOPE_IDS.has(plant.templateId)) return plant
+  return {
+    ...plant,
+    templateId: KOCHIA_TEMPLATE.id,
+    kind: KOCHIA_TEMPLATE.kind,
+    category: KOCHIA_TEMPLATE.category,
+    name: KOCHIA_TEMPLATE.name,
+    label: KOCHIA_TEMPLATE.label,
+    size: plant.size ?? KOCHIA_TEMPLATE.size,
+    colors: KOCHIA_TEMPLATE.colors,
+  }
+}
+
+function migratePlan(plan: Plan): Plan {
+  const migratedPalette = Array.from(
+    new Map(plan.palette.map((template) => {
+      const migratedTemplate = migrateTemplate(template)
+      return [migratedTemplate.id, migratedTemplate] as const
+    })).values(),
+  )
+  const migratedPlants = plan.plants.map((plant) => migratePlant(plant))
+  return {
+    ...plan,
+    palette: migratedPalette,
+    plants: migratedPlants,
+  }
+}
 
 function createPlan(title = '새 조감도', user?: LandiUser | null): Plan {
   const plan: Plan = { id: `plan-${crypto.randomUUID()}`, title, updatedAt: new Date().toISOString(), ...getEditorMetadata(user), backgroundUrl: null, palette: defaultPalette, plants: [], backgroundFade: 62, backgroundSaturation: 100, plantIntensity: 100, showPlantLabels: false }
@@ -63,7 +113,7 @@ function loadPlans(): Plan[] {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return []
     const parsed = JSON.parse(saved) as Plan[]
-    return parsed
+    return parsed.map((plan) => migratePlan(plan))
   } catch {
     return []
   }
@@ -514,7 +564,7 @@ function App() {
         const joinedPlanIds: string[] = []
         const joinedAt = new Date().toISOString()
         const sharedPlans = sharedRows.map((row) => {
-          const plan = sharedRowToPlan(row)
+          const plan = migratePlan(sharedRowToPlan(row))
           if (plan.ownerId === authUser.id || plan.ownerEmail?.toLowerCase() === authUser.email.toLowerCase()) return plan
           const member = plan.members?.find((item) => item.email.toLowerCase() === authUser.email.toLowerCase())
           if (!member || member.status === 'joined') return plan
@@ -1084,7 +1134,7 @@ function App() {
   }
 
   if (mode === 'preview' && selectedPlan) {
-    return <main data-theme="light" className="landi-app min-h-screen bg-[var(--landi-bg)] p-5 text-slate-900 md:p-8"><header className="mx-auto mb-5 flex max-w-6xl flex-wrap items-center justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => setMode('list')} className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 transition hover:text-slate-900"><ArrowLeft size={16} />목록으로</button><div className="grid gap-0.5"><h1 className="truncate text-[22px] font-semibold leading-7 tracking-normal text-slate-900">{selectedPlan.title}</h1><p className="text-[13px] font-medium leading-5 text-slate-500">식재 {selectedPlan.plants.length}개 · {selectedPlanUpdatedLabel}</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}{compactGuideButton}<button type="button" onClick={() => openEditor(selectedPlan.id)} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Pencil size={17} />편집보드로</button><button type="button" onClick={() => deletePlan(selectedPlan.id)} className={`${actionButtonClass} border border-[var(--landi-danger-border)] bg-white text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]`}><Trash2 size={17} />삭제</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}<section className="mx-auto max-w-6xl overflow-auto rounded-md bg-white p-4 shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><StaticPlanBoard plan={selectedPlan} /></section></main>
+    return <main data-theme="light" className="landi-app min-h-screen bg-[var(--landi-bg)] p-5 text-slate-900 md:p-8"><header className="mx-auto mb-5 flex max-w-6xl flex-wrap items-center justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => setMode('list')} className="mb-3 inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"><ArrowLeft size={15} />목록으로</button><div className="grid gap-1.5"><h1 className="truncate text-[22px] font-semibold leading-7 tracking-normal text-slate-900">{selectedPlan.title}</h1><p className="text-[13px] font-medium leading-5 text-slate-500">식재 {selectedPlan.plants.length}개 · {selectedPlanUpdatedLabel}</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}{compactGuideButton}<button type="button" onClick={() => openEditor(selectedPlan.id)} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Pencil size={17} />편집보드로</button><button type="button" onClick={() => deletePlan(selectedPlan.id)} className={`${actionButtonClass} border border-[var(--landi-danger-border)] bg-white text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]`}><Trash2 size={17} />삭제</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}<section className="mx-auto max-w-6xl overflow-auto rounded-md bg-white p-4 shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><StaticPlanBoard plan={selectedPlan} /></section></main>
   }
 
   if (!selectedPlan) return null
