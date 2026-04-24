@@ -1,7 +1,7 @@
 ﻿// Landi 전역 도메인 타입과 화면 상태 타입을 정의한다.
 export type PlantKind = 'evergreen' | 'deciduous' | 'shrub' | 'groundcover' | 'flower'
 export type PlantType = 'tree' | 'shrub' | 'flower' | 'grass'
-export type ViewMode = 'list' | 'preview' | 'edit'
+export type ViewMode = 'list' | 'preview' | 'edit' | 'guide'
 export type PlanRole = 'owner' | 'editor' | 'viewer'
 
 export type PlantColors = {
