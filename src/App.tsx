@@ -255,17 +255,19 @@ function GuidePage({ authControls, onBack }: { authControls: ReactNode; onBack: 
 
   return (
     <main data-theme="light" className="landi-app min-h-screen bg-[var(--landi-bg)] px-5 py-6 text-slate-900 md:px-8">
-      <header className="mx-auto mb-10 flex max-w-6xl flex-wrap items-center justify-between gap-4 md:mb-12">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[var(--landi-primary)] text-white shadow-sm"><Trees size={24} /></div>
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-normal">Landi 시작 가이드</h1>
-            <p className="text-sm text-slate-500">처음 쓰는 흐름을 빠르게 익히는 안내입니다.</p>
+      <header className="mx-auto mb-10 flex max-w-6xl flex-wrap items-start justify-between gap-4 md:mb-12">
+        <div className="grid min-w-0 gap-2">
+          <button type="button" onClick={onBack} className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50" aria-label="돌아가기" title="돌아가기"><ArrowLeft size={17} /></button>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[var(--landi-primary)] text-white shadow-sm"><Trees size={24} /></div>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold tracking-normal">Landi 시작 가이드</h1>
+              <p className="text-sm text-slate-500">처음 쓰는 흐름을 빠르게 익히는 안내입니다.</p>
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {authControls}
-          <button type="button" onClick={onBack} className="landi-action-button inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-4 font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"><ArrowLeft size={17} />돌아가기</button>
         </div>
       </header>
       <section className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
@@ -1140,7 +1142,7 @@ function App() {
   }
 
   if (mode === 'preview' && selectedPlan) {
-    return <main data-theme="light" className="landi-app min-h-screen bg-[var(--landi-bg)] p-5 text-slate-900 md:p-8"><header className="mx-auto mb-5 flex max-w-6xl flex-wrap items-center justify-between gap-3"><div className="min-w-0"><button type="button" onClick={() => setMode('list')} className="mb-3 inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"><ArrowLeft size={15} />목록으로</button><div className="grid gap-1.5"><h1 className="truncate text-[22px] font-semibold leading-7 tracking-normal text-slate-900">{selectedPlan.title}</h1><p className="text-[13px] font-medium leading-5 text-slate-500">식재 {selectedPlan.plants.length}개 · {selectedPlanUpdatedLabel}</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}{compactGuideButton}<button type="button" onClick={() => openEditor(selectedPlan.id)} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Pencil size={17} />편집보드로</button><button type="button" onClick={() => deletePlan(selectedPlan.id)} className={`${actionButtonClass} border border-[var(--landi-danger-border)] bg-white text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]`}><Trash2 size={17} />삭제</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}<section className="mx-auto max-w-6xl overflow-auto rounded-md bg-white p-4 shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><StaticPlanBoard plan={selectedPlan} /></section></main>
+    return <main data-theme="light" className="landi-app min-h-screen bg-[var(--landi-bg)] p-5 text-slate-900 md:p-8"><header className="mx-auto mb-5 flex max-w-6xl flex-wrap items-start justify-between gap-3"><div className="grid min-w-0 gap-2"><button type="button" onClick={() => setMode('list')} className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50" aria-label="목록으로" title="목록으로"><ArrowLeft size={17} /></button><div className="grid gap-1"><h1 className="truncate text-[22px] font-semibold leading-7 tracking-normal text-slate-900">{selectedPlan.title}</h1><p className="text-[13px] font-medium leading-5 text-slate-500">식재 {selectedPlan.plants.length}개 · {selectedPlanUpdatedLabel}</p></div></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => openEditor(selectedPlan.id)} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Pencil size={17} />편집보드로</button>{compactGuideButton}{authControls}<button type="button" onClick={() => deletePlan(selectedPlan.id)} className={`${actionButtonClass} border border-[var(--landi-danger-border)] bg-white text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]`}><Trash2 size={17} />삭제</button></div></header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}<section className="mx-auto max-w-6xl overflow-auto rounded-md bg-white p-4 shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><StaticPlanBoard plan={selectedPlan} /></section></main>
   }
 
   if (!selectedPlan) return null
