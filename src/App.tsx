@@ -24,6 +24,7 @@ import { LoginRequiredPage } from './components/views/LoginRequiredPage'
 import { LoadingScreen } from './components/views/LoadingScreen'
 import { PreviewPage } from './components/views/PreviewPage'
 import { BOARD_WIDTH, STORAGE_KEY, flowerColorOptions, kindOptions } from './data/plants'
+import { useEditorLayout } from './hooks/useEditorLayout'
 import { clampPercent, clampPlantSize, getRepresentativeLabelIds } from './lib/canvasHelpers'
 import { createDemoPlans } from './lib/demoPlans'
 import { createPlan, createTemplate, getEditorMetadata, getMemberInitial, getMemberRoleLabel, getMemberStatusLabel, getPlanRoleLabel, getPlanUpdatedLabel, getTreeScaleLabel, groupTreeScaleItems, isTreeKind, loadPlans, migratePlan } from './lib/planHelpers'
@@ -93,9 +94,6 @@ function App() {
   const [isInviting, setIsInviting] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [visiblePlantCategories, setVisiblePlantCategories] = useState<Record<PlantCategory, boolean>>(defaultVisiblePlantCategories)
-  const [boardScale, setBoardScale] = useState(1)
-  const [viewport, setViewport] = useState(() => ({ width: typeof window === 'undefined' ? 1440 : window.innerWidth, height: typeof window === 'undefined' ? 900 : window.innerHeight }))
-  const [allowPortraitEditing, setAllowPortraitEditing] = useState(false)
   const boardFrameRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const previewCanvasRef = useRef<HTMLDivElement>(null)
@@ -278,34 +276,6 @@ function App() {
       }
     }
   }, [plans, authUser])
-  useEffect(() => {
-    const updateViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
-    updateViewport()
-    window.addEventListener('resize', updateViewport)
-    window.addEventListener('orientationchange', updateViewport)
-    return () => {
-      window.removeEventListener('resize', updateViewport)
-      window.removeEventListener('orientationchange', updateViewport)
-    }
-  }, [])
-
-  useEffect(() => {
-    const frame = boardFrameRef.current
-    if (!frame) return
-
-    const updateScale = () => {
-      const frameStyle = window.getComputedStyle(frame)
-      const horizontalPadding = parseFloat(frameStyle.paddingLeft) + parseFloat(frameStyle.paddingRight)
-      const availableWidth = Math.max(0, frame.clientWidth - horizontalPadding)
-      setBoardScale(Math.min(1, availableWidth / BOARD_WIDTH))
-    }
-    updateScale()
-
-    const observer = new ResizeObserver(updateScale)
-    observer.observe(frame)
-    return () => observer.disconnect()
-  }, [mode])
-
   useEffect(() => () => {
     if (remoteSaveDebounceRef.current) window.clearTimeout(remoteSaveDebounceRef.current)
     if (saveStatusTimerRef.current) window.clearTimeout(saveStatusTimerRef.current)
@@ -689,9 +659,7 @@ function App() {
   const plantIntensity = clampPercent(selectedPlan?.plantIntensity ?? 100)
   const showPlantLabels = selectedPlan?.showPlantLabels ?? false
   const visiblePlants = useMemo(() => selectedPlan?.plants.filter((plant) => visiblePlantCategories[plant.category as PlantCategory] ?? true) ?? [], [selectedPlan?.plants, visiblePlantCategories])
-  const isMobileViewport = viewport.width < 768
-  const isTabletPortrait = viewport.width >= 768 && viewport.width < 1280 && viewport.height > viewport.width
-  const shouldShowOrientationLock = mode === 'edit' && selectedPlan && (isMobileViewport || (isTabletPortrait && !allowPortraitEditing))
+  const { boardScale, setAllowPortraitEditing, isMobileViewport, shouldShowOrientationLock } = useEditorLayout({ mode, hasSelectedPlan: Boolean(selectedPlan), boardFrameRef })
   const actionButtonClass = "landi-action-button inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 font-semibold shadow-sm transition"
   const leftPanelClass = `landi-editor-panel ${isPaletteCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-slate-200 bg-[var(--landi-panel)] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:border-b-0 lg:border-r ${isPaletteCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
   const roleLabel = selectedPlanRole === 'owner' ? '소유자' : selectedPlanRole === 'editor' ? '수정가능' : '읽기전용'
