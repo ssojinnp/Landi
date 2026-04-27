@@ -3,9 +3,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import type { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent } from 'react'
 import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable'
-import { ArrowLeft, ChevronDown, ChevronUp, ClipboardList, Download, HelpCircle, ImagePlus, LogIn, LogOut, Minus, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, SlidersHorizontal, Sprout, Trash2, Trees, UserRound, Users } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, ClipboardList, Download, HelpCircle, ImagePlus, LogIn, LogOut, Minus, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, SlidersHorizontal, Trash2, Trees, UserRound, Users } from 'lucide-react'
 import { PlantSymbol } from './components/canvas/PlantSymbol'
 import { BoardSettingsPanel } from './components/editor/BoardSettingsPanel'
+import { PalettePanel } from './components/editor/PalettePanel'
+import { SchedulePanel } from './components/editor/SchedulePanel'
 import { SharePanel } from './components/editor/SharePanel'
 import { GuidePage } from './components/views/GuidePage'
 import { ListPage } from './components/views/ListPage'
@@ -248,14 +250,6 @@ function PlantNameLabel({ plant, hoverOnly = false, exportHidden = false }: { pl
       style={{ backgroundColor: 'rgba(255, 255, 255, 0.92)', border: '1px solid rgba(15, 23, 42, 0.10)', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.16)', color: '#334155', lineHeight: '18px', textOverflow: 'ellipsis' }}
     >
       <span className="landi-plant-label-text">{plant.name}</span>
-    </div>
-  )
-}
-
-function InventoryPlantIcon({ plant }: { plant: PlantTemplate }) {
-  return (
-    <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md bg-[var(--landi-panel)] ring-1 ring-slate-200">
-      <PlantSymbol plant={{ ...plant, size: 24 }} />
     </div>
   )
 }
@@ -1085,97 +1079,9 @@ function App() {
     <main data-theme="light" className="landi-app flex min-h-screen flex-col overflow-y-auto bg-[var(--landi-bg)] text-slate-900 lg:h-screen lg:min-h-0 lg:overflow-hidden lg:flex-row">
       <aside className={leftPanelClass}>
         <div className={`flex shrink-0 border-b border-slate-200 ${isPaletteCollapsed ? 'h-12 items-center justify-between px-2 lg:h-auto lg:flex-col lg:items-center lg:justify-start lg:border-b-0 lg:px-2 lg:py-3' : 'h-16 items-center px-4 md:px-5'}`}><div className={`flex min-w-0 items-center ${isPaletteCollapsed ? 'gap-2 lg:flex-col' : 'gap-2.5'}`}><div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[var(--landi-primary)] text-white shadow-sm" title="Landi"><Trees size={20} /></div><div className={isPaletteCollapsed ? 'hidden' : ''}><h1 className="text-lg font-semibold tracking-normal">Landi</h1><p className="text-[13px] text-slate-500">편집보드</p></div></div>{isPaletteCollapsed && <span className="mx-1 h-6 w-px bg-slate-200 lg:mx-0 lg:my-3 lg:h-px lg:w-8" aria-hidden="true" />}<div className={`flex items-center gap-1.5 ${isPaletteCollapsed ? 'lg:flex-col' : 'ml-auto'}`}><button type="button" onClick={() => setMode('list')} className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label="목록으로" title="목록으로"><ArrowLeft size={17} /></button><button type="button" onClick={() => setIsPaletteCollapsed((collapsed) => !collapsed)} className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label={isPaletteCollapsed ? '식재 팔레트 펼치기' : '식재 팔레트 접기'} title={isPaletteCollapsed ? '식재 팔레트 펼치기' : '식재 팔레트 접기'}>{isPaletteCollapsed ? <><ChevronDown size={17} className="lg:hidden" /><PanelLeftOpen size={17} className="hidden lg:block" /></> : <><ChevronUp size={17} className="lg:hidden" /><PanelLeftClose size={17} className="hidden lg:block" /></>}</button></div></div>
-        <section className={`flex min-h-0 flex-1 flex-col px-4 py-3 lg:overflow-hidden ${isPaletteCollapsed ? 'hidden' : ''}`}><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-700">식재 팔레트</h2><Sprout size={17} className="text-[var(--landi-primary)]" /></div>{!hasPlanBackground && <div className="mb-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-[12px] leading-5 text-slate-500 shadow-sm">{canEditSelectedPlan ? '도면 업로드 후 식재를 도면 위에 배치할 수 있습니다.' : '읽기전용 권한에서는 식재 배치와 편집 기능을 사용할 수 없습니다.'}</div>}<div className="mb-3 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"><button type="button" onClick={() => canEditSelectedPlan && setIsPaletteFormOpen((open) => !open)} disabled={!canEditSelectedPlan} className="landi-form-trigger flex h-10 w-full items-center justify-between gap-3 px-3 text-left font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"><span>{editingTemplateId ? "식재 타입 수정" : "식재 타입 등록"}</span><span className="rounded-sm bg-[var(--landi-primary-soft)] px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--landi-primary)]">{isPaletteFormVisible ? "닫기" : "열기"}</span></button>{isPaletteFormVisible && <div onKeyDown={handlePaletteFormKeyDown} className="grid gap-2 border-t border-slate-100 p-3"><select value={isTreeKind(newPlantKind) ? 'tree' : newPlantKind} onChange={(event) => setNewPlantKind(event.target.value === 'tree' ? 'deciduous' : event.target.value as PlantKind)} className="landi-form-control h-9 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2.5 text-slate-700 outline-none focus:border-[var(--landi-primary)]"><option value="tree">나무</option><option value="groundcover">풀</option><option value="flower">꽃</option></select>{isTreeKind(newPlantKind) && <select value={newPlantKind === 'shrub' ? 'shrub' : 'canopy'} onChange={(event) => setNewPlantKind(event.target.value === 'shrub' ? 'shrub' : 'deciduous')} className="landi-form-control h-9 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2.5 text-slate-700 outline-none focus:border-[var(--landi-primary)]"><option value="canopy">교목</option><option value="shrub">관목</option></select>}<input value={newPlantName} onChange={(event) => { setNewPlantName(event.target.value); if (paletteFormError) setPaletteFormError("") }} placeholder="식재명 예: 라벤더" aria-invalid={Boolean(paletteFormError)} className={`landi-form-control h-9 w-full min-w-0 rounded-md border px-2.5 outline-none focus:border-[var(--landi-primary)] ${paletteFormError ? "border-[var(--landi-danger)] bg-[var(--landi-danger-soft)]" : "border-slate-300"}`} />{paletteFormError && <p className="text-xs font-semibold text-[var(--landi-danger)]" role="alert">{paletteFormError}</p>}{newPlantKind === 'flower' && <div className="rounded-md border border-slate-200 bg-[var(--landi-panel)] p-2"><div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">꽃 색상</div><div className="grid grid-cols-6 gap-1.5">{flowerColorOptions.map((color) => <button key={color.value} type="button" onClick={() => setNewFlowerColor(color.value)} title={color.name} className={`h-7 rounded-md border shadow-sm ${newFlowerColor === color.value ? 'border-slate-900 ring-2 ring-slate-300' : 'border-white'}`} style={{ backgroundColor: color.value }} aria-label={`${color.name} 꽃 색상 선택`} />)}</div></div>}<input value={newPlantLabel} onChange={(event) => { setNewPlantLabel(event.target.value); if (paletteFormError) setPaletteFormError("") }} placeholder="학명/메모 선택" className="landi-form-control h-9 w-full min-w-0 rounded-md border border-slate-300 px-2.5 outline-none focus:border-[var(--landi-primary)]" /><button type="button" onClick={addTemplateToPalette} className="landi-form-control inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[var(--landi-primary)] px-3 text-white shadow-sm transition hover:bg-[var(--landi-primary-dark)]"><Plus size={16} />{editingTemplateId ? "팔레트 수정" : "팔레트 등록"}</button>{editingTemplateId && <button type="button" onClick={resetPaletteForm} className="landi-form-control inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-slate-600 shadow-sm transition hover:bg-slate-50">수정 취소</button>}</div>}</div><div className="min-h-0 flex-1 overflow-y-auto pr-1">
-  {kindOptions.map((group) => {
-    const groupTemplates = selectedPlan.palette.filter((template) => template.category === group.category)
-    const templateSections = group.category === '나무' ? groupTreeScaleItems(groupTemplates) : [{ label: null, items: groupTemplates }]
-
-    return (
-      <section key={group.category} className="mb-4 border-t border-slate-200 pt-3 first:border-t-0 first:pt-0">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: group.colors.primary }} />
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{group.label}</h3>
-          </div>
-          <span className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{groupTemplates.length}</span>
+        <div className={isPaletteCollapsed ? 'hidden' : ''}>
+          <PalettePanel selectedPlan={selectedPlan} hasPlanBackground={hasPlanBackground} canEditSelectedPlan={canEditSelectedPlan} canPlacePlants={canPlacePlants} editingTemplateId={editingTemplateId} isPaletteFormVisible={isPaletteFormVisible} newPlantKind={newPlantKind} newPlantName={newPlantName} newPlantLabel={newPlantLabel} newFlowerColor={newFlowerColor} paletteFormError={paletteFormError} setIsPaletteFormOpen={setIsPaletteFormOpen} setNewPlantKind={setNewPlantKind} setNewPlantName={setNewPlantName} setNewPlantLabel={setNewPlantLabel} setNewFlowerColor={setNewFlowerColor} clearPaletteFormError={() => { if (paletteFormError) setPaletteFormError('') }} addTemplateToPalette={addTemplateToPalette} resetPaletteForm={resetPaletteForm} handlePaletteFormKeyDown={handlePaletteFormKeyDown} addPlant={addPlant} startEditTemplate={startEditTemplate} deleteTemplateFromPalette={deleteTemplateFromPalette} isTreeKind={isTreeKind} groupTreeScaleItems={groupTreeScaleItems} getTreeScaleLabel={getTreeScaleLabel} />
         </div>
-
-        {groupTemplates.length === 0 ? (
-          <div className="rounded-md border border-dashed border-slate-200 bg-white/70 px-3 py-4 text-center text-xs text-slate-400">
-            등록된 {group.label} 식재가 없습니다.
-          </div>
-        ) : (
-          <div className="grid gap-2">
-            {templateSections.map((section) => (
-              <div key={section.label ?? group.category} className="grid gap-1.5">
-                {section.label && <div className="px-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">{section.label}</div>}
-                <div className="grid gap-1.5 md:grid-cols-2 lg:block lg:space-y-1.5">
-                  {section.items.map((template) => (
-              <div key={template.id} className={`group relative grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md border bg-white/80 px-2 py-1.5 transition ${canPlacePlants ? 'border-transparent hover:border-[var(--landi-primary-border)] hover:bg-white hover:shadow-sm' : 'border-transparent opacity-70'}`}>
-                <button
-                  type="button"
-                  draggable={canPlacePlants}
-                  onClick={() => addPlant(template)}
-                  onDragStart={(event) => {
-                    if (!canPlacePlants) {
-                      event.preventDefault()
-                      return
-                    }
-                    event.dataTransfer.setData('template-id', template.id)
-                  }}
-                  disabled={!canPlacePlants}
-                  className="flex min-w-0 w-full items-center gap-2 overflow-hidden text-left disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden">
-                    <PlantSymbol plant={{ ...template, size: 24 }} />
-                  </div>
-                  <div className="min-w-0 flex-1 overflow-hidden">
-                    <div className="truncate text-sm font-semibold leading-5 text-slate-800" title={template.name}>{template.name}</div>
-                    <div className="botanical-name truncate text-xs leading-4 text-slate-500" title={template.label}>{template.label}</div>
-                  </div>
-                </button>
-                <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition group-hover:opacity-100">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      startEditTemplate(template)
-                    }}
-                    disabled={!canEditSelectedPlan}
-                    className="grid h-7 w-7 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-500"
-                    aria-label={`${template.name} 팔레트 수정`}
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      deleteTemplateFromPalette(template.id)
-                    }}
-                    disabled={!canEditSelectedPlan}
-                    className="grid h-7 w-7 place-items-center rounded-md text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)] hover:text-[var(--landi-danger-dark)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--landi-danger)]"
-                    aria-label={`${template.name} 팔레트 삭제`}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-                <div className="pointer-events-none absolute left-2 top-[calc(100%+6px)] z-30 hidden w-max max-w-[230px] rounded-md border border-slate-200 bg-white px-3 py-2 text-left shadow-[0_14px_32px_rgba(15,23,42,0.16)] group-hover:block group-focus-within:block">
-                  <p className="truncate text-xs font-semibold text-slate-800">{template.name}</p>
-                  <p className="mt-1 truncate text-[11px] font-medium text-slate-500">{template.label}</p>
-                  {getTreeScaleLabel(template.kind) && <p className="mt-1 text-[11px] font-semibold text-[var(--landi-primary)]">{getTreeScaleLabel(template.kind)}</p>}
-                </div>
-              </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-    )
-  })}
-</div></section>
       </aside>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex h-[64px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[var(--landi-panel)] px-4 py-3 md:px-6"><div className="flex min-w-[240px] flex-1 items-center gap-2 overflow-hidden"><label className={`group flex h-9 min-w-[180px] max-w-[620px] flex-[1_1_620px] items-center gap-2 rounded-md border px-2 transition ${canEditSelectedPlan ? 'cursor-text border-transparent hover:border-[var(--landi-primary-border)] hover:bg-white/60 focus-within:border-[var(--landi-primary)] focus-within:bg-white/80 focus-within:shadow-sm' : 'cursor-default border-transparent bg-transparent'}`}><span className="sr-only">조감도 제목</span><input value={selectedPlan.title} onChange={(event) => updateSelectedPlan({ title: event.target.value })} disabled={!canEditSelectedPlan} className="landi-title-input min-w-[120px] w-full bg-transparent text-[19px] leading-6 tracking-normal text-slate-900 outline-none disabled:cursor-default" aria-label="조감도 제목" /><Pencil size={16} className={`shrink-0 text-slate-400 transition ${canEditSelectedPlan ? 'group-hover:text-[var(--landi-primary)]' : 'opacity-0'}`} aria-hidden="true" /></label><span className="hidden max-w-[180px] shrink truncate text-[12px] font-medium leading-4 text-slate-500 xl:inline">{selectedPlanUpdatedLabel}</span>{saveStatus !== 'saved' && <span className={`hidden shrink-0 text-[12px] font-medium leading-4 xl:inline ${saveStatusClass}`} role="status">{saveStatusLabel}</span>}</div><div className="flex flex-wrap items-center gap-2">{authControls}{compactGuideButton}<button type="button" onClick={exportPlanImage} disabled={isExporting} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)] disabled:cursor-wait disabled:opacity-70`}><Download size={17} />{isExporting ? "내보내는 중" : "내보내기"}</button>{canEditSelectedPlan && <label title="도면 업로드" aria-label="도면 업로드" className="grid h-10 w-10 cursor-pointer place-items-center rounded-md bg-[var(--landi-accent-copper)] text-white shadow-sm transition hover:bg-[var(--landi-accent-copper-dark)]"><ImagePlus size={18} /><input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="sr-only" /></label>}</div></header>
@@ -1214,7 +1120,7 @@ function App() {
           <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-slate-700">{toolPanelLabel}</h2></div>
 {activeToolPanel === 'share' && <SharePanel selectedPlan={selectedPlan} selectedPlanRole={selectedPlanRole} ownerLabel={ownerLabel} roleLabel={roleLabel} authUserEmail={authUser?.email} canManageSelectedPlan={canManageSelectedPlan} inviteEmail={inviteEmail} inviteRole={inviteRole} inviteError={inviteError} inviteStatus={inviteStatus} isInviting={isInviting} setInviteEmail={setInviteEmail} clearInviteFeedback={() => { if (inviteError) setInviteError(''); if (inviteStatus) setInviteStatus('') }} setInviteRole={setInviteRole} inviteMember={inviteMember} updateMemberRole={updateMemberRole} removeMember={removeMember} getMemberInitial={getMemberInitial} getMemberRoleLabel={getMemberRoleLabel} getMemberStatusLabel={getMemberStatusLabel} />}
 {activeToolPanel === 'board' && <BoardSettingsPanel canUseBoardControls={canUseBoardControls} canEditSelectedPlan={canEditSelectedPlan} hasPlanBackground={hasPlanBackground} backgroundFade={backgroundFade} backgroundSaturation={backgroundSaturation} plantIntensity={plantIntensity} showPlantLabels={showPlantLabels} plantCategories={plantCategories} visiblePlantCategories={visiblePlantCategories} selectedPlantCount={selectedPlan.plants.length} setIsClearPlantsConfirmOpen={setIsClearPlantsConfirmOpen} updateBackgroundFade={(value) => updateSelectedPlan({ backgroundFade: value })} updateBackgroundSaturation={(value) => updateSelectedPlan({ backgroundSaturation: value })} updatePlantIntensity={(value) => updateSelectedPlan({ plantIntensity: value })} toggleShowPlantLabels={() => updateSelectedPlan({ showPlantLabels: !showPlantLabels })} togglePlantCategoryVisibility={togglePlantCategoryVisibility} />}
-          {activeToolPanel === 'schedule' && <div className="flex min-h-0 flex-1 flex-col gap-3"><div className="shrink-0 rounded-md border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-center justify-between gap-3"><span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">배치 수량</span><span className="rounded-md bg-[var(--landi-primary-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--landi-primary)]">총 {selectedPlan.plants.length}</span></div><p className="mt-2 text-[12px] leading-5 text-slate-500">도면에 배치된 식재를 유형별로 자동 집계해 보여줍니다.</p></div><div className="min-h-0 flex-1 overflow-y-auto pr-1">{groupedInventory.length > 0 ? <div className="grid min-w-0 grid-cols-1 gap-3">{groupedInventory.map((group) => <section key={group.category} className="min-w-0"><div className="mb-1.5 flex items-center justify-between gap-2 px-0.5"><div className="flex min-w-0 items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.colors.primary }} /><h3 className="truncate text-[12px] font-semibold uppercase tracking-wide text-slate-500">{group.label}</h3></div><span className="shrink-0 rounded-sm bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">{group.total}</span></div><div className="grid min-w-0 grid-cols-1 gap-2">{(group.category === '나무' ? groupTreeScaleItems(group.items) : [{ label: null, items: group.items }]).map((section) => <div key={section.label ?? group.category} className="grid min-w-0 gap-1.5">{section.label && <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{section.label}</div>}{section.items.map((item) => <div key={item.id} className="group relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-2 shadow-sm"><InventoryPlantIcon plant={item} /><div className="min-w-0 overflow-hidden"><p className="truncate text-sm font-semibold leading-5 text-slate-800" title={item.name}>{item.name}</p><p className="botanical-name truncate text-xs leading-4 text-slate-500" title={item.label}>{item.label}</p></div><span className="shrink-0 text-lg font-semibold text-slate-900">{item.count}</span><div className="pointer-events-none absolute left-3 top-[calc(100%+6px)] z-30 hidden w-max max-w-[230px] rounded-md border border-slate-200 bg-white px-3 py-2 text-left shadow-[0_14px_32px_rgba(15,23,42,0.16)] group-hover:block group-focus-within:block"><p className="truncate text-[12px] font-semibold text-slate-800">{item.name}</p><p className="mt-1 truncate text-[11px] font-medium text-slate-500">{item.label}</p><p className="mt-1 text-[11px] font-semibold text-[var(--landi-primary)]">{section.label ? `${group.label} · ${section.label}` : group.label} · 수량 {item.count}</p></div></div>)}</div>)}</div></section>)}</div> : <div className="flex h-full min-h-[180px] items-center justify-center rounded-md border border-dashed border-slate-200 bg-white/70 px-3 py-8 text-[12px] leading-5 text-slate-400">아직 도면에 배치된 식재가 없습니다.</div>}</div></div>}
+          {activeToolPanel === 'schedule' && <SchedulePanel totalPlants={selectedPlan.plants.length} groupedInventory={groupedInventory} groupTreeScaleItems={groupTreeScaleItems} />}
         </section>}
       </aside>
       {isClearPlantsConfirmOpen && <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/40 px-5 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="clear-plants-title"><div className="w-full max-w-[360px] rounded-md border border-slate-200 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.28)]"><div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-[var(--landi-danger-soft)] text-[var(--landi-danger)]"><Trash2 size={19} /></div><div className="min-w-0"><h2 id="clear-plants-title" className="text-[15px] font-semibold leading-6 text-slate-950">배치된 식재를 모두 제거할까요?</h2><p className="mt-1.5 text-[13px] leading-5 text-slate-500">도면 위에 배치된 식재만 삭제됩니다. 식재 팔레트와 도면은 유지됩니다.</p></div></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsClearPlantsConfirmOpen(false)} className="landi-form-control inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50">취소</button><button type="button" onClick={clearPlacedPlants} className="landi-form-control inline-flex h-9 items-center justify-center rounded-md bg-[var(--landi-danger)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--landi-danger-dark)]">모두 제거</button></div></div></div>}
