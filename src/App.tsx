@@ -1,10 +1,12 @@
 ﻿
 import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
-import type { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import type { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent } from 'react'
 import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable'
 import { ArrowLeft, Check, ChevronDown, ChevronUp, ClipboardList, Download, Eye, HelpCircle, ImagePlus, Layers, LogIn, LogOut, Minus, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, SlidersHorizontal, Sprout, Trash2, Trees, UserRound, Users } from 'lucide-react'
 import { PlantSymbol } from './components/canvas/PlantSymbol'
+import { GuidePage } from './components/views/GuidePage'
+import { LoadingScreen } from './components/views/LoadingScreen'
 import { BOARD_HEIGHT, BOARD_WIDTH, defaultPalette, flowerColorOptions, kindOptions, plantToneOptions, STORAGE_KEY } from './data/plants'
 import { getPlanRole, getSessionUser, isSupabaseConfigured, normalizePlanForUser, planToSharedRow, sharedRowToPlan, supabase, type LandiUser, type SharedPlanRow } from './lib/supabase'
 import type { Plan, Plant, PlantKind, PlantTemplate, PlanMember, PlanRole, ViewMode } from './types'
@@ -213,110 +215,6 @@ function groupTreeScaleItems<T extends Pick<PlantTemplate, 'kind'>>(items: T[]) 
     { label: '관목', items: shrubItems },
     { label: null, items: otherItems },
   ].filter((group) => group.items.length > 0)
-}
-
-function LoadingScreen({ message }: { message: string }) {
-  return (
-    <main data-theme="light" className="landi-app flex min-h-screen items-center justify-center bg-[var(--landi-bg)] px-5 text-slate-900">
-      <div className="grid justify-items-center gap-3 text-center">
-        <div className="grid h-11 w-11 place-items-center rounded-md bg-[var(--landi-primary)] text-white shadow-sm">
-          <Trees size={24} />
-        </div>
-        <div className="flex items-center gap-1.5" aria-hidden="true">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--landi-primary)]" />
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--landi-primary)] [animation-delay:120ms]" />
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--landi-primary)] [animation-delay:240ms]" />
-        </div>
-        <p className="text-[13px] font-semibold text-slate-500">{message}</p>
-      </div>
-    </main>
-  )
-}
-
-function GuidePage({ authControls, onBack }: { authControls: ReactNode; onBack: () => void }) {
-  const steps = [
-    { title: '조감도 만들기', description: '목록에서 새 조감도를 만든 뒤 편집보드로 들어갑니다.' },
-    { title: '도면 올리기', description: '상단 업로드 버튼으로 배경 도면을 먼저 올립니다.' },
-    { title: '식재 채우기', description: '좌측 팔레트에서 나무, 풀, 꽃 식재를 등록합니다.' },
-    { title: '도면에 배치', description: '등록한 식재를 클릭하거나 드래그해 도면 위에 놓습니다.' },
-    { title: '보드 설정 다듬기', description: '선택한 식재의 크기를 조정하고 우측 보드 설정에서 라벨과 표시 유형을 정리합니다.' },
-    { title: '수량집계 후 저장', description: '우측 수량집계에서 배치 결과를 확인하고 이미지로 내보냅니다.' },
-  ]
-  const panels = [
-    { title: '좌측 식재 팔레트', description: '식재를 등록하고 도면에 올릴 준비를 하는 영역입니다.' },
-    { title: '중앙 편집보드', description: '도면 위에서 식재 위치와 크기를 조정하는 작업 공간입니다.' },
-    { title: '우측 도구 패널', description: '공유, 보드 설정, 수량집계를 확인하는 보조 영역입니다.' },
-  ]
-  const tips = [
-    '식재 이름 라벨은 같은 식재가 여러 개 있어도 대표 1개만 표시합니다.',
-    '보이는 식재 유형은 기본적으로 모두 켜져 있고, 새 식재를 추가하면 해당 유형이 자동으로 다시 표시됩니다.',
-    '읽기전용 멤버는 조감도를 확인할 수 있지만 편집과 업로드는 할 수 없습니다.',
-  ]
-
-  return (
-    <main data-theme="light" className="landi-app min-h-screen bg-[var(--landi-bg)] px-5 py-6 text-slate-900 md:px-8">
-      <header className="mx-auto mb-10 flex max-w-6xl flex-wrap items-start justify-between gap-4 md:mb-12">
-        <div className="grid min-w-0 gap-2">
-          <button type="button" onClick={onBack} className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50" aria-label="돌아가기" title="돌아가기"><ArrowLeft size={17} /></button>
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[var(--landi-primary)] text-white shadow-sm"><Trees size={24} /></div>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-semibold tracking-normal">Landi 시작 가이드</h1>
-              <p className="text-sm text-slate-500">처음 쓰는 흐름을 빠르게 익히는 안내입니다.</p>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {authControls}
-        </div>
-      </header>
-      <section className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <article className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Quick Start</p>
-              <h2 className="mt-1 text-xl font-semibold tracking-normal text-slate-950">도면을 올리고 식재를 배치한 뒤 이미지로 저장합니다.</h2>
-            </div>
-            <span className="rounded-md bg-[var(--landi-primary-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--landi-primary)]">6단계</span>
-          </div>
-          <div className="grid gap-3">
-            {steps.map((step, index) => (
-              <div key={step.title} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-md border border-slate-200 bg-[var(--landi-panel)] p-3">
-                <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--landi-primary)] text-xs font-semibold text-white">{index + 1}</span>
-                <div className="min-w-0">
-                  <h3 className="text-[13px] font-semibold text-slate-900">{step.title}</h3>
-                  <p className="mt-1 text-[12px] leading-5 text-slate-500">{step.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </article>
-        <aside className="grid gap-5">
-          <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Workspace</p>
-            <h2 className="mt-1 text-base font-semibold text-slate-900">화면 구성</h2>
-            <div className="mt-4 grid gap-2">
-              {panels.map((panel) => (
-                <div key={panel.title} className="rounded-md border border-slate-200 bg-white px-3 py-2.5">
-                  <h3 className="text-[13px] font-semibold text-slate-800">{panel.title}</h3>
-                  <p className="mt-1 text-[12px] leading-5 text-slate-500">{panel.description}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className="rounded-md border border-[var(--landi-accent-copper-border)] bg-white p-5 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Checklist</p>
-            <h2 className="mt-1 text-base font-semibold text-slate-900">작업 전에 알아두면 좋은 점</h2>
-            <div className="mt-4 grid gap-2">
-              {tips.map((tip) => (
-                <p key={tip} className="rounded-md bg-[var(--landi-accent-copper-soft)] px-3 py-2 text-[12px] leading-5 text-[var(--landi-accent-copper-dark)]">{tip}</p>
-              ))}
-            </div>
-          </section>
-        </aside>
-      </section>
-    </main>
-  )
 }
 
 function ResizeHandle({ anchor, onResizeStart }: { anchor: ResizeAnchor; onResizeStart: (anchor: ResizeAnchor, event: ReactPointerEvent<HTMLButtonElement>) => void }) {
@@ -1170,11 +1068,11 @@ function App() {
   if (isSupabaseConfigured && authUser && isSharedPlansLoading && mode === 'list') return <LoadingScreen message="조감도 목록을 불러오고 있습니다." />
 
   if (mode === 'list') {
-return <main data-theme="light" className="landi-app min-h-screen bg-[var(--landi-bg)] px-5 py-6 text-slate-900 md:px-8"><header className="mx-auto mb-10 grid max-w-6xl gap-6 md:mb-12"><div className="flex flex-wrap items-start justify-between gap-4"><div className="flex min-w-0 items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-md bg-[var(--landi-primary)] text-white shadow-sm"><Trees size={24} /></div><div><h1 className="text-2xl font-semibold tracking-normal">Landi</h1><p className="text-sm text-slate-500">조감도 목록</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}{guideButton}{displayPlans.length > 0 && <button type="button" onClick={createNewPlan} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Plus size={17} />새 조감도 생성</button>}</div></div>{displayPlans.length > 0 && <div className="grid gap-3 md:grid-cols-3"><div className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">조감도</p><div className="mt-2 flex items-end justify-between gap-3"><p className="text-[24px] font-semibold leading-none text-slate-950">{plans.length}</p><span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">전체</span></div></div><div className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">편집 권한</p><div className="mt-2 flex items-end justify-between gap-3"><p className="text-[24px] font-semibold leading-none text-slate-950">{editablePlanCount}</p><span className="rounded-md bg-[var(--landi-primary-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--landi-primary)]">수정 가능</span></div></div><div className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">공유 / 도면 업로드</p><div className="mt-2 flex items-end justify-between gap-3"><p className="text-[24px] font-semibold leading-none text-slate-950">{sharedPlanCount} / {planWithBoardCount}</p><span className="rounded-md bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700">공유 / 업로드</span></div></div></div>}</header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}{!isSupabaseConfigured && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-[var(--landi-warning-border)] bg-[var(--landi-warning-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-warning-dark)]">Supabase 환경 변수를 설정하면 Google 로그인과 멤버 초대가 활성화됩니다.</div>}<section className={`mx-auto grid max-w-6xl gap-5 ${displayPlans.length === 0 ? "min-h-[52vh] content-center pt-8 md:pt-12" : "md:grid-cols-2 xl:grid-cols-3"}`}>{displayPlans.length === 0 ? <div className="rounded-md border border-dashed border-[var(--landi-accent-copper-border)] bg-white/85 px-5 py-14 text-center shadow-sm md:col-span-2 xl:col-span-3"><div className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-[var(--landi-accent-copper-soft)] text-[var(--landi-accent-copper-dark)]"><Layers size={24} /></div><h2 className="mt-4 text-lg font-semibold text-slate-900">등록된 조감도가 없습니다</h2><p className="mt-2 text-sm leading-6 text-slate-500">새 조감도를 생성한 뒤 도면을 업로드하고 식재 팔레트를 구성해보세요.</p><button type="button" onClick={createNewPlan} className={`${actionButtonClass} mx-auto mt-5 bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Plus size={17} />새 조감도 생성</button></div> : displayPlans.map((plan) => { const cardRole = getPlanRole(plan, authUser); const canOpenEditor = cardRole === 'owner' || cardRole === 'editor'; const roleBadgeClass = cardRole === 'owner' ? 'border-[var(--landi-accent-copper-border)] bg-[var(--landi-accent-copper-soft)] text-[var(--landi-accent-copper-dark)]' : cardRole === 'editor' ? 'border-[var(--landi-primary-border)] bg-[var(--landi-primary-soft)] text-[var(--landi-primary)]' : 'border-sky-200 bg-sky-50 text-sky-700'; const roleAccentClass = cardRole === 'owner' ? 'bg-[var(--landi-accent-copper)]' : cardRole === 'editor' ? 'bg-[var(--landi-primary)]' : 'bg-sky-500'; return <article key={plan.id} className="landi-plan-card overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(15,23,42,0.12)]"><div className="border-b border-slate-200 bg-slate-50 px-4 py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="flex items-start gap-2"><span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${roleAccentClass}`} aria-hidden="true" /><h2 className="min-w-0 break-words text-[17px] font-semibold leading-6 text-slate-900">{plan.title}</h2></div><div className="mt-2 flex flex-wrap items-center gap-2"><span className={`shrink-0 rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${roleBadgeClass}`}>{getPlanRoleLabel(cardRole)}</span><p className="min-w-0 text-[12px] leading-5 text-slate-500">{getPlanUpdatedLabel(plan)}</p></div></div>{cardRole === 'owner' && <button type="button" onClick={() => deletePlan(plan.id)} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-[var(--landi-danger)] transition hover:bg-[var(--landi-danger-soft)]" aria-label="조감도 삭제"><Trash2 size={18} /></button>}</div></div><div className="px-4 pt-4"><PlanThumbnail plan={plan} /></div><div className="grid gap-4 px-4 pb-4 pt-4"><div className="flex items-center justify-between gap-3 text-[12px] text-slate-500"><div className="flex items-center gap-2"><Layers size={14} className="text-slate-400" /><span>식재 {plan.plants.length}개</span></div><div className="flex items-center gap-2"><ImagePlus size={14} className="text-slate-400" /><span>{plan.backgroundUrl ? '도면 업로드 완료' : '도면 없음'}</span></div></div><div className={`grid gap-2 ${canOpenEditor ? 'grid-cols-2' : 'grid-cols-1'}`}><button type="button" onClick={() => openPreview(plan.id)} className={`${actionButtonClass} w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}><Eye size={17} />미리보기</button>{canOpenEditor && <button type="button" onClick={() => openEditor(plan.id)} className={`${actionButtonClass} w-full bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Pencil size={17} />편집보드</button>}</div></div></article> })}</section></main>
+return <main data-theme="light" className="landi-app min-h-screen bg-[var(--landi-bg)] px-5 py-6 text-slate-900 md:px-8"><header className="mx-auto mb-10 grid max-w-6xl gap-6 md:mb-12"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex min-w-0 items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-md bg-[var(--landi-primary)] text-white shadow-sm"><Trees size={24} /></div><div><h1 className="text-2xl font-semibold tracking-normal">Landi</h1><p className="text-sm text-slate-500">조감도 목록</p></div></div><div className="flex flex-wrap items-center gap-2">{authControls}{guideButton}{displayPlans.length > 0 && <button type="button" onClick={createNewPlan} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Plus size={17} />새 조감도 생성</button>}</div></div>{displayPlans.length > 0 && <div className="grid gap-3 md:grid-cols-3"><div className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">조감도</p><div className="mt-2 flex items-end justify-between gap-3"><p className="text-[24px] font-semibold leading-none text-slate-950">{plans.length}</p><span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">전체</span></div></div><div className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">편집 권한</p><div className="mt-2 flex items-end justify-between gap-3"><p className="text-[24px] font-semibold leading-none text-slate-950">{editablePlanCount}</p><span className="rounded-md bg-[var(--landi-primary-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--landi-primary)]">수정 가능</span></div></div><div className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">공유 / 도면 업로드</p><div className="mt-2 flex items-end justify-between gap-3"><p className="text-[24px] font-semibold leading-none text-slate-950">{sharedPlanCount} / {planWithBoardCount}</p><span className="rounded-md bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700">공유 / 업로드</span></div></div></div>}</header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}{!isSupabaseConfigured && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-[var(--landi-warning-border)] bg-[var(--landi-warning-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-warning-dark)]">Supabase 환경 변수를 설정하면 Google 로그인과 멤버 초대가 활성화됩니다.</div>}<section className={`mx-auto grid max-w-6xl gap-5 ${displayPlans.length === 0 ? "min-h-[52vh] content-center pt-8 md:pt-12" : "md:grid-cols-2 xl:grid-cols-3"}`}>{displayPlans.length === 0 ? <div className="rounded-md border border-dashed border-[var(--landi-accent-copper-border)] bg-white/85 px-5 py-14 text-center shadow-sm md:col-span-2 xl:col-span-3"><div className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-[var(--landi-accent-copper-soft)] text-[var(--landi-accent-copper-dark)]"><Layers size={24} /></div><h2 className="mt-4 text-lg font-semibold text-slate-900">등록된 조감도가 없습니다</h2><p className="mt-2 text-sm leading-6 text-slate-500">새 조감도를 생성한 뒤 도면을 업로드하고 식재 팔레트를 구성해보세요.</p><button type="button" onClick={createNewPlan} className={`${actionButtonClass} mx-auto mt-5 bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Plus size={17} />새 조감도 생성</button></div> : displayPlans.map((plan) => { const cardRole = getPlanRole(plan, authUser); const canOpenEditor = cardRole === 'owner' || cardRole === 'editor'; const roleBadgeClass = cardRole === 'owner' ? 'border-[var(--landi-accent-copper-border)] bg-[var(--landi-accent-copper-soft)] text-[var(--landi-accent-copper-dark)]' : cardRole === 'editor' ? 'border-[var(--landi-primary-border)] bg-[var(--landi-primary-soft)] text-[var(--landi-primary)]' : 'border-sky-200 bg-white text-sky-700'; const roleAccentClass = cardRole === 'owner' ? 'bg-[var(--landi-accent-copper)]' : cardRole === 'editor' ? 'bg-[var(--landi-primary)]' : 'bg-sky-400'; return <article key={plan.id} className="landi-plan-card overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(15,23,42,0.12)]"><div className="border-b border-slate-200 bg-slate-50 px-4 py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="flex items-start gap-2"><span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${roleAccentClass}`} aria-hidden="true" /><h2 className="min-w-0 break-words text-[17px] font-semibold leading-6 text-slate-900">{plan.title}</h2></div><div className="mt-2 flex flex-wrap items-center gap-2"><span className={`shrink-0 rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${roleBadgeClass}`}>{getPlanRoleLabel(cardRole)}</span><p className="min-w-0 text-[12px] leading-5 text-slate-500">{getPlanUpdatedLabel(plan)}</p></div></div>{cardRole === 'owner' && <button type="button" onClick={() => deletePlan(plan.id)} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-[var(--landi-danger)] transition hover:bg-[var(--landi-danger-soft)]" aria-label="조감도 삭제"><Trash2 size={18} /></button>}</div></div><div className="px-4 pt-4"><PlanThumbnail plan={plan} /></div><div className="grid gap-4 px-4 pb-4 pt-4"><div className="flex items-center justify-between gap-3 text-[12px] text-slate-500"><div className="flex items-center gap-2"><Layers size={14} className="text-slate-400" /><span>식재 {plan.plants.length}개</span></div><div className="flex items-center gap-2"><ImagePlus size={14} className="text-slate-400" /><span>{plan.backgroundUrl ? '도면 업로드 완료' : '도면 없음'}</span></div></div><div className={`grid gap-2 ${canOpenEditor ? 'grid-cols-2' : 'grid-cols-1'}`}><button type="button" onClick={() => openPreview(plan.id)} className={`${actionButtonClass} w-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}><Eye size={17} />미리보기</button>{canOpenEditor && <button type="button" onClick={() => openEditor(plan.id)} className={`${actionButtonClass} w-full bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Pencil size={17} />편집보드</button>}</div></div></article> })}</section></main>
   }
 
   if (mode === 'preview' && selectedPlan) {
-return <main data-theme="light" className="landi-app min-h-screen bg-[var(--landi-bg)] p-5 text-slate-900 md:p-8"><header className="mx-auto mb-5 grid max-w-6xl gap-5"><div className="flex flex-wrap items-start justify-between gap-3"><div className="grid min-w-0 gap-2"><button type="button" onClick={() => setMode('list')} className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50" aria-label="목록으로" title="목록으로"><ArrowLeft size={17} /></button><div className="grid gap-1.5"><div className="flex min-w-0 flex-wrap items-start gap-2"><h1 className="min-w-0 flex-1 break-words text-[22px] font-semibold leading-7 tracking-normal text-slate-900">{selectedPlan.title}</h1><span className={`shrink-0 rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${selectedPlanRole === 'owner' ? 'border-[var(--landi-accent-copper-border)] bg-[var(--landi-accent-copper-soft)] text-[var(--landi-accent-copper-dark)]' : selectedPlanRole === 'editor' ? 'border-[var(--landi-primary-border)] bg-[var(--landi-primary-soft)] text-[var(--landi-primary)]' : 'border-sky-200 bg-sky-50 text-sky-700'}`}>{getPlanRoleLabel(selectedPlanRole)}</span></div><p className="text-[13px] font-medium leading-5 text-slate-500">식재 {selectedPlan.plants.length}개 · {selectedPlanUpdatedLabel}</p></div></div><div className="flex flex-wrap items-center gap-2">{selectedPlanRole === 'viewer' && <button type="button" onClick={exportPlanImage} disabled={isExporting} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)] disabled:cursor-wait disabled:opacity-70`}><Download size={17} />{isExporting ? "내보내는 중" : "내보내기"}</button>}{canOpenSelectedPlanEditor && <button type="button" onClick={() => openEditor(selectedPlan.id)} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Pencil size={17} />편집보드로</button>}{compactGuideButton}{authControls}{selectedPlanRole === 'owner' && <button type="button" onClick={() => deletePlan(selectedPlan.id)} className={`${actionButtonClass} border border-[var(--landi-danger-border)] bg-white text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]`}><Trash2 size={17} />삭제</button>}</div></div>{selectedPlanRole === 'viewer' && <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-[12px] leading-5 text-slate-500 shadow-sm">읽기전용 조감도는 현재 저장된 상태 그대로 확인하고 이미지로 내보낼 수 있습니다.</div>}</header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}<section className="mx-auto max-w-6xl overflow-auto rounded-md bg-white p-4 shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><div ref={previewCanvasRef} data-export-board="true" className="w-fit"><StaticPlanBoard plan={selectedPlan} /></div></section></main>
+return <main data-theme="light" className="landi-app min-h-screen bg-[var(--landi-bg)] p-5 text-slate-900 md:p-8"><header className="mx-auto mb-5 grid max-w-6xl gap-5"><div className="flex flex-wrap items-start justify-between gap-3"><div className="grid min-w-0 gap-2"><button type="button" onClick={() => setMode('list')} className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50" aria-label="목록으로" title="목록으로"><ArrowLeft size={17} /></button><div className="grid gap-1.5"><div className="flex min-w-0 flex-wrap items-start gap-2"><h1 className="min-w-0 flex-1 break-words text-[22px] font-semibold leading-7 tracking-normal text-slate-900">{selectedPlan.title}</h1><span className={`shrink-0 rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${selectedPlanRole === 'owner' ? 'border-[var(--landi-accent-copper-border)] bg-[var(--landi-accent-copper-soft)] text-[var(--landi-accent-copper-dark)]' : selectedPlanRole === 'editor' ? 'border-[var(--landi-primary-border)] bg-[var(--landi-primary-soft)] text-[var(--landi-primary)]' : 'border-sky-200 bg-white text-sky-700'}`}>{getPlanRoleLabel(selectedPlanRole)}</span></div><p className="text-[13px] font-medium leading-5 text-slate-500">식재 {selectedPlan.plants.length}개 · {selectedPlanUpdatedLabel}</p></div></div><div className="flex flex-wrap items-center gap-2">{selectedPlanRole === 'viewer' && <button type="button" onClick={exportPlanImage} disabled={isExporting} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)] disabled:cursor-wait disabled:opacity-70`}><Download size={17} />{isExporting ? "내보내는 중" : "내보내기"}</button>}{canOpenSelectedPlanEditor && <button type="button" onClick={() => openEditor(selectedPlan.id)} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><Pencil size={17} />편집보드로</button>}{compactGuideButton}{authControls}{selectedPlanRole === 'owner' && <button type="button" onClick={() => deletePlan(selectedPlan.id)} className={`${actionButtonClass} border border-[var(--landi-danger-border)] bg-white text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]`}><Trash2 size={17} />삭제</button>}</div></div>{selectedPlanRole === 'viewer' && <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-[12px] leading-5 text-slate-500 shadow-sm">읽기전용 조감도는 현재 저장된 상태 그대로 확인하고 이미지로 내보낼 수 있습니다.</div>}</header>{authError && <div className="mx-auto mb-4 max-w-6xl rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}<section className="mx-auto max-w-6xl overflow-auto rounded-md bg-white p-4 shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><div ref={previewCanvasRef} data-export-board="true" className="w-fit"><StaticPlanBoard plan={selectedPlan} /></div></section></main>
   }
 
   if (!selectedPlan) return null
