@@ -2,12 +2,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import type { ChangeEvent, DragEvent } from 'react'
-import { ArrowLeft, ChevronDown, ChevronUp, ClipboardList, Download, HelpCircle, ImagePlus, LogIn, LogOut, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, SlidersHorizontal, Trees, UserRound, Users } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, ClipboardList, HelpCircle, LogIn, LogOut, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, SlidersHorizontal, Trees, UserRound, Users } from 'lucide-react'
 import { PlanThumbnail } from './components/canvas/PlanThumbnail'
 import { StaticPlanBoard } from './components/canvas/StaticPlanBoard'
 import { BoardSettingsPanel } from './components/editor/BoardSettingsPanel'
 import { ClearPlantsDialog } from './components/editor/ClearPlantsDialog'
 import { EditorCanvas } from './components/editor/EditorCanvas'
+import { EditorHeader } from './components/editor/EditorHeader'
+import { OrientationLockDialog } from './components/editor/OrientationLockDialog'
 import { PalettePanel } from './components/editor/PalettePanel'
 import { SchedulePanel } from './components/editor/SchedulePanel'
 import { SharePanel } from './components/editor/SharePanel'
@@ -762,7 +764,7 @@ function App() {
         </div>
       </aside>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-[64px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[var(--landi-panel)] px-4 py-3 md:px-6"><div className="flex min-w-[240px] flex-1 items-center gap-2 overflow-hidden"><label className={`group flex h-9 min-w-[180px] max-w-[620px] flex-[1_1_620px] items-center gap-2 rounded-md border px-2 transition ${canEditSelectedPlan ? 'cursor-text border-transparent hover:border-[var(--landi-primary-border)] hover:bg-white/60 focus-within:border-[var(--landi-primary)] focus-within:bg-white/80 focus-within:shadow-sm' : 'cursor-default border-transparent bg-transparent'}`}><span className="sr-only">조감도 제목</span><input value={selectedPlan.title} onChange={(event) => updateSelectedPlan({ title: event.target.value })} disabled={!canEditSelectedPlan} className="landi-title-input min-w-[120px] w-full bg-transparent text-[19px] leading-6 tracking-normal text-slate-900 outline-none disabled:cursor-default" aria-label="조감도 제목" /><Pencil size={16} className={`shrink-0 text-slate-400 transition ${canEditSelectedPlan ? 'group-hover:text-[var(--landi-primary)]' : 'opacity-0'}`} aria-hidden="true" /></label><span className="hidden max-w-[180px] shrink truncate text-[12px] font-medium leading-4 text-slate-500 xl:inline">{selectedPlanUpdatedLabel}</span>{saveStatus !== 'saved' && <span className={`hidden shrink-0 text-[12px] font-medium leading-4 xl:inline ${saveStatusClass}`} role="status">{saveStatusLabel}</span>}</div><div className="flex flex-wrap items-center gap-2">{authControls}{compactGuideButton}<button type="button" onClick={exportPlanImage} disabled={isExporting} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)] disabled:cursor-wait disabled:opacity-70`}><Download size={17} />{isExporting ? "내보내는 중" : "내보내기"}</button>{canEditSelectedPlan && <label title="도면 업로드" aria-label="도면 업로드" className="grid h-10 w-10 cursor-pointer place-items-center rounded-md bg-[var(--landi-accent-copper)] text-white shadow-sm transition hover:bg-[var(--landi-accent-copper-dark)]"><ImagePlus size={18} /><input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} className="sr-only" /></label>}</div></header>
+        <EditorHeader title={selectedPlan.title} canEditSelectedPlan={canEditSelectedPlan} selectedPlanUpdatedLabel={selectedPlanUpdatedLabel} saveStatus={saveStatus} saveStatusLabel={saveStatusLabel} saveStatusClass={saveStatusClass} authControls={authControls} compactGuideButton={compactGuideButton} actionButtonClass={actionButtonClass} isExporting={isExporting} onTitleChange={(title) => updateSelectedPlan({ title })} onExport={exportPlanImage} onUpload={handleUpload} />
         {authError && <div className="mx-4 mt-3 rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}
         {!canEditSelectedPlan && <div className="mx-4 mt-3 rounded-md border border-[var(--landi-warning-border)] bg-[var(--landi-warning-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-warning-dark)]">읽기전용 권한입니다. 조감도 확인과 이미지 내보내기만 사용할 수 있습니다.</div>}
         {exportError && <div className="mx-4 mt-3 rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{exportError}</div>}
@@ -770,15 +772,7 @@ function App() {
             <div className={`transition duration-200 ${shouldShowOrientationLock ? 'pointer-events-none opacity-25 blur-[1px]' : ''}`}>
               <EditorCanvas selectedPlan={selectedPlan} boardScale={boardScale} backgroundOverlay={backgroundOverlay} backgroundSaturation={backgroundSaturation} plantIntensity={plantIntensity} showPlantLabels={showPlantLabels} representativeLabelIds={representativeLabelIds} visiblePlants={visiblePlants} selectedPlantId={selectedPlantId} selectedPlant={selectedPlant} selectedPlantToolbarStyle={selectedPlantToolbarStyle} canEditSelectedPlan={canEditSelectedPlan} boardFrameRef={boardFrameRef} canvasRef={canvasRef} onSelectPlant={setSelectedPlantId} onClearSelection={() => setSelectedPlantId(null)} onUpload={handleUpload} onDrop={handleDrop} onUpdatePlant={updatePlant} onDeleteSelectedPlant={deleteSelectedPlant} />
             </div>
-          {shouldShowOrientationLock && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/45 px-5 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="orientation-lock-title">
-              <div className="w-full max-w-[420px] rounded-md border border-white/70 bg-white px-5 py-5 text-center shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
-                <p id="orientation-lock-title" className="text-lg font-semibold text-slate-950">가로모드에 최적화되어 있습니다</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">태블릿을 가로로 돌리면 도면과 식재 위치를 더 넓고 정확하게 편집할 수 있습니다.</p>
-                {!isMobileViewport && <button type="button" onClick={() => setAllowPortraitEditing(true)} className={`${actionButtonClass} mt-4 bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}>세로에서 계속하기</button>}
-              </div>
-            </div>
-          )}
+          <OrientationLockDialog open={shouldShowOrientationLock} isMobileViewport={isMobileViewport} actionButtonClass={actionButtonClass} onContinuePortrait={() => setAllowPortraitEditing(true)} />
         </div>
       </section>
       <aside className="flex max-h-[48vh] min-h-0 w-full shrink-0 flex-col border-t border-slate-200 bg-[var(--landi-panel)] lg:h-screen lg:max-h-none lg:w-auto lg:flex-row lg:border-l lg:border-t-0">
