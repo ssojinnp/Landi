@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import type { ChangeEvent, DragEvent } from 'react'
-import { HelpCircle, LogIn, LogOut, Trees, UserRound } from 'lucide-react'
+import { HelpCircle, LogIn, LogOut, UserRound } from 'lucide-react'
 import { PlanThumbnail } from './components/canvas/PlanThumbnail'
 import { StaticPlanBoard } from './components/canvas/StaticPlanBoard'
 import { BoardSettingsPanel } from './components/editor/BoardSettingsPanel'
@@ -10,6 +10,7 @@ import { ClearPlantsDialog } from './components/editor/ClearPlantsDialog'
 import { EditorCanvas } from './components/editor/EditorCanvas'
 import { EditorHeader } from './components/editor/EditorHeader'
 import { EditorSidebarHeader } from './components/editor/EditorSidebarHeader'
+import { EditorStatusBanners } from './components/editor/EditorStatusBanners'
 import { OrientationLockDialog } from './components/editor/OrientationLockDialog'
 import { PalettePanel } from './components/editor/PalettePanel'
 import { SchedulePanel } from './components/editor/SchedulePanel'
@@ -17,6 +18,7 @@ import { SharePanel } from './components/editor/SharePanel'
 import { ToolRail } from './components/editor/ToolRail'
 import { GuidePage } from './components/views/GuidePage'
 import { ListPage } from './components/views/ListPage'
+import { LoginRequiredPage } from './components/views/LoginRequiredPage'
 import { LoadingScreen } from './components/views/LoadingScreen'
 import { PreviewPage } from './components/views/PreviewPage'
 import { BOARD_WIDTH, STORAGE_KEY, flowerColorOptions, kindOptions } from './data/plants'
@@ -741,9 +743,7 @@ function App() {
   if (isSupabaseConfigured && !authReady) return <LoadingScreen message="로그인 상태를 확인하고 있습니다." />
   if (mode === 'guide') return <GuidePage authControls={authControls} onBack={closeGuide} />
 
-  if (isSupabaseConfigured && !authUser) {
-    return <main data-theme="light" className="landi-app flex min-h-screen items-center justify-center bg-[var(--landi-bg)] px-5 py-8 text-slate-900"><section className="w-full max-w-[420px] rounded-md border border-slate-200 bg-white/90 p-5 text-center shadow-[0_24px_70px_rgba(47,55,43,0.14)]"><div className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-[var(--landi-primary)] text-white shadow-sm"><Trees size={26} /></div><h1 className="mt-4 text-2xl font-semibold tracking-normal text-slate-950">Landi</h1><p className="mt-2 text-[13px] leading-5 text-slate-500">내 조감도와 공유받은 조감도를 확인하려면 로그인이 필요합니다.</p><button type="button" onClick={signInWithGoogle} className={`${actionButtonClass} mt-5 w-full bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)]`}><LogIn size={17} />Google 로그인</button><button type="button" onClick={openGuide} className="landi-action-button mt-2 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-4 font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"><HelpCircle size={17} />시작 가이드</button>{authError && <div className="mt-3 rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-left text-xs font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}</section></main>
-  }
+  if (isSupabaseConfigured && !authUser) return <LoginRequiredPage actionButtonClass={actionButtonClass} authError={authError} onSignIn={signInWithGoogle} onOpenGuide={openGuide} />
 
   if (isSupabaseConfigured && authUser && isSharedPlansLoading && mode === 'list') return <LoadingScreen message="조감도 목록을 불러오고 있습니다." />
 
@@ -767,9 +767,7 @@ function App() {
       </aside>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
         <EditorHeader title={selectedPlan.title} canEditSelectedPlan={canEditSelectedPlan} selectedPlanUpdatedLabel={selectedPlanUpdatedLabel} saveStatus={saveStatus} saveStatusLabel={saveStatusLabel} saveStatusClass={saveStatusClass} authControls={authControls} compactGuideButton={compactGuideButton} actionButtonClass={actionButtonClass} isExporting={isExporting} onTitleChange={(title) => updateSelectedPlan({ title })} onExport={exportPlanImage} onUpload={handleUpload} />
-        {authError && <div className="mx-4 mt-3 rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{authError}</div>}
-        {!canEditSelectedPlan && <div className="mx-4 mt-3 rounded-md border border-[var(--landi-warning-border)] bg-[var(--landi-warning-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-warning-dark)]">읽기전용 권한입니다. 조감도 확인과 이미지 내보내기만 사용할 수 있습니다.</div>}
-        {exportError && <div className="mx-4 mt-3 rounded-md border border-[var(--landi-danger-border)] bg-[var(--landi-danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--landi-danger-dark)]" role="alert">{exportError}</div>}
+        <EditorStatusBanners authError={authError} exportError={exportError} canEditSelectedPlan={canEditSelectedPlan} />
         <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto p-0 md:p-2 lg:p-2">
             <div className={`transition duration-200 ${shouldShowOrientationLock ? 'pointer-events-none opacity-25 blur-[1px]' : ''}`}>
               <EditorCanvas selectedPlan={selectedPlan} boardScale={boardScale} backgroundOverlay={backgroundOverlay} backgroundSaturation={backgroundSaturation} plantIntensity={plantIntensity} showPlantLabels={showPlantLabels} representativeLabelIds={representativeLabelIds} visiblePlants={visiblePlants} selectedPlantId={selectedPlantId} selectedPlant={selectedPlant} selectedPlantToolbarStyle={selectedPlantToolbarStyle} canEditSelectedPlan={canEditSelectedPlan} boardFrameRef={boardFrameRef} canvasRef={canvasRef} onSelectPlant={setSelectedPlantId} onClearSelection={() => setSelectedPlantId(null)} onUpload={handleUpload} onDrop={handleDrop} onUpdatePlant={updatePlant} onDeleteSelectedPlant={deleteSelectedPlant} />
