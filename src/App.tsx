@@ -2,17 +2,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import type { ChangeEvent, DragEvent } from 'react'
-import { ArrowLeft, ChevronDown, ChevronUp, ClipboardList, HelpCircle, LogIn, LogOut, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, SlidersHorizontal, Trees, UserRound, Users } from 'lucide-react'
+import { HelpCircle, LogIn, LogOut, Trees, UserRound } from 'lucide-react'
 import { PlanThumbnail } from './components/canvas/PlanThumbnail'
 import { StaticPlanBoard } from './components/canvas/StaticPlanBoard'
 import { BoardSettingsPanel } from './components/editor/BoardSettingsPanel'
 import { ClearPlantsDialog } from './components/editor/ClearPlantsDialog'
 import { EditorCanvas } from './components/editor/EditorCanvas'
 import { EditorHeader } from './components/editor/EditorHeader'
+import { EditorSidebarHeader } from './components/editor/EditorSidebarHeader'
 import { OrientationLockDialog } from './components/editor/OrientationLockDialog'
 import { PalettePanel } from './components/editor/PalettePanel'
 import { SchedulePanel } from './components/editor/SchedulePanel'
 import { SharePanel } from './components/editor/SharePanel'
+import { ToolRail } from './components/editor/ToolRail'
 import { GuidePage } from './components/views/GuidePage'
 import { ListPage } from './components/views/ListPage'
 import { LoadingScreen } from './components/views/LoadingScreen'
@@ -758,7 +760,7 @@ function App() {
   return (
     <main data-theme="light" className="landi-app flex min-h-screen flex-col overflow-y-auto bg-[var(--landi-bg)] text-slate-900 lg:h-screen lg:min-h-0 lg:overflow-hidden lg:flex-row">
       <aside className={leftPanelClass}>
-        <div className={`flex shrink-0 border-b border-slate-200 ${isPaletteCollapsed ? 'h-12 items-center justify-between px-2 lg:h-auto lg:flex-col lg:items-center lg:justify-start lg:border-b-0 lg:px-2 lg:py-3' : 'h-16 items-center px-4 md:px-5'}`}><div className={`flex min-w-0 items-center ${isPaletteCollapsed ? 'gap-2 lg:flex-col' : 'gap-2.5'}`}><div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[var(--landi-primary)] text-white shadow-sm" title="Landi"><Trees size={20} /></div><div className={isPaletteCollapsed ? 'hidden' : ''}><h1 className="text-lg font-semibold tracking-normal">Landi</h1><p className="text-[13px] text-slate-500">편집보드</p></div></div>{isPaletteCollapsed && <span className="mx-1 h-6 w-px bg-slate-200 lg:mx-0 lg:my-3 lg:h-px lg:w-8" aria-hidden="true" />}<div className={`flex items-center gap-1.5 ${isPaletteCollapsed ? 'lg:flex-col' : 'ml-auto'}`}><button type="button" onClick={() => setMode('list')} className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label="목록으로" title="목록으로"><ArrowLeft size={17} /></button><button type="button" onClick={() => setIsPaletteCollapsed((collapsed) => !collapsed)} className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label={isPaletteCollapsed ? '식재 팔레트 펼치기' : '식재 팔레트 접기'} title={isPaletteCollapsed ? '식재 팔레트 펼치기' : '식재 팔레트 접기'}>{isPaletteCollapsed ? <><ChevronDown size={17} className="lg:hidden" /><PanelLeftOpen size={17} className="hidden lg:block" /></> : <><ChevronUp size={17} className="lg:hidden" /><PanelLeftClose size={17} className="hidden lg:block" /></>}</button></div></div>
+        <EditorSidebarHeader isPaletteCollapsed={isPaletteCollapsed} onBack={() => setMode('list')} onToggleCollapse={() => setIsPaletteCollapsed((collapsed) => !collapsed)} />
         <div className={isPaletteCollapsed ? 'hidden' : ''}>
           <PalettePanel selectedPlan={selectedPlan} hasPlanBackground={hasPlanBackground} canEditSelectedPlan={canEditSelectedPlan} canPlacePlants={canPlacePlants} editingTemplateId={editingTemplateId} isPaletteFormVisible={isPaletteFormVisible} newPlantKind={newPlantKind} newPlantName={newPlantName} newPlantLabel={newPlantLabel} newFlowerColor={newFlowerColor} paletteFormError={paletteFormError} setIsPaletteFormOpen={setIsPaletteFormOpen} setNewPlantKind={setNewPlantKind} setNewPlantName={setNewPlantName} setNewPlantLabel={setNewPlantLabel} setNewFlowerColor={setNewFlowerColor} clearPaletteFormError={() => { if (paletteFormError) setPaletteFormError('') }} addTemplateToPalette={addTemplateToPalette} resetPaletteForm={resetPaletteForm} handlePaletteFormKeyDown={handlePaletteFormKeyDown} addPlant={addPlant} startEditTemplate={startEditTemplate} deleteTemplateFromPalette={deleteTemplateFromPalette} isTreeKind={isTreeKind} groupTreeScaleItems={groupTreeScaleItems} getTreeScaleLabel={getTreeScaleLabel} />
         </div>
@@ -776,13 +778,7 @@ function App() {
         </div>
       </section>
       <aside className="flex max-h-[48vh] min-h-0 w-full shrink-0 flex-col border-t border-slate-200 bg-[var(--landi-panel)] lg:h-screen lg:max-h-none lg:w-auto lg:flex-row lg:border-l lg:border-t-0">
-        <nav className="flex h-12 shrink-0 items-center justify-center gap-1 border-b border-slate-200 px-2 lg:h-full lg:w-14 lg:flex-col lg:justify-start lg:border-b-0 lg:border-r lg:px-2 lg:py-3" aria-label="편집 도구">
-          <button type="button" onClick={() => toggleToolPanel('share')} className={toolRailButtonClass('share')} aria-label="공유" title="공유"><Users size={18} /></button>
-          <button type="button" onClick={() => toggleToolPanel('board')} className={toolRailButtonClass('board')} aria-label="보드 설정" title="보드 설정"><SlidersHorizontal size={18} /></button>
-          <button type="button" onClick={() => toggleToolPanel('schedule')} className={toolRailButtonClass('schedule')} aria-label="수량 집계" title="수량 집계"><ClipboardList size={18} /></button>
-          <span className="mx-1 h-6 w-px bg-slate-200 lg:mx-0 lg:my-1 lg:h-px lg:w-8" aria-hidden="true" />
-          <button type="button" onClick={toggleRightPanel} className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50" aria-label={activeToolPanel ? '우측 패널 접기' : '우측 패널 펼치기'} title={activeToolPanel ? '우측 패널 접기' : '우측 패널 펼치기'}>{activeToolPanel ? <><ChevronUp size={17} className="lg:hidden" /><PanelRightClose size={17} className="hidden lg:block" /></> : <><ChevronDown size={17} className="lg:hidden" /><PanelRightOpen size={17} className="hidden lg:block" /></>}</button>
-        </nav>
+        <ToolRail activeToolPanel={activeToolPanel} toolRailButtonClass={toolRailButtonClass} onTogglePanel={toggleToolPanel} onToggleRightPanel={toggleRightPanel} />
         {activeToolPanel && <section className={`min-h-0 flex-1 px-4 py-3 md:px-5 lg:w-[286px] lg:flex-none ${activeToolPanel === 'schedule' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
           <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-slate-700">{toolPanelLabel}</h2></div>
 {activeToolPanel === 'share' && <SharePanel selectedPlan={selectedPlan} selectedPlanRole={selectedPlanRole} ownerLabel={ownerLabel} roleLabel={roleLabel} authUserEmail={authUser?.email} canManageSelectedPlan={canManageSelectedPlan} inviteEmail={inviteEmail} inviteRole={inviteRole} inviteError={inviteError} inviteStatus={inviteStatus} isInviting={isInviting} setInviteEmail={setInviteEmail} clearInviteFeedback={() => { if (inviteError) setInviteError(''); if (inviteStatus) setInviteStatus('') }} setInviteRole={setInviteRole} inviteMember={inviteMember} updateMemberRole={updateMemberRole} removeMember={removeMember} getMemberInitial={getMemberInitial} getMemberRoleLabel={getMemberRoleLabel} getMemberStatusLabel={getMemberStatusLabel} />}
