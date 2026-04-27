@@ -26,9 +26,10 @@ import { PreviewPage } from './components/views/PreviewPage'
 import { BOARD_WIDTH, STORAGE_KEY, flowerColorOptions, kindOptions } from './data/plants'
 import { useEditorLayout } from './hooks/useEditorLayout'
 import { usePlanAccessActions } from './hooks/usePlanAccessActions'
+import { usePlanNavigationActions } from './hooks/usePlanNavigationActions'
 import { clampPercent, clampPlantSize, getRepresentativeLabelIds } from './lib/canvasHelpers'
 import { createDemoPlans } from './lib/demoPlans'
-import { createPlan, createTemplate, getEditorMetadata, getMemberInitial, getMemberRoleLabel, getMemberStatusLabel, getPlanRoleLabel, getPlanUpdatedLabel, getTreeScaleLabel, groupTreeScaleItems, isTreeKind, loadPlans, migratePlan } from './lib/planHelpers'
+import { createTemplate, getEditorMetadata, getMemberInitial, getMemberRoleLabel, getMemberStatusLabel, getPlanRoleLabel, getPlanUpdatedLabel, getTreeScaleLabel, groupTreeScaleItems, isTreeKind, loadPlans, migratePlan } from './lib/planHelpers'
 import { getPlanRole, getSessionUser, isSupabaseConfigured, normalizePlanForUser, planToSharedRow, sharedRowToPlan, supabase, type LandiUser, type SharedPlanRow } from './lib/supabase'
 import type { Plan, Plant, PlantKind, PlantTemplate, PlanRole, ViewMode } from './types'
 
@@ -311,6 +312,20 @@ function App() {
     updateSelectedPlan,
   })
 
+  const { createNewPlan, deletePlan, openPreview, openEditor, openGuide, closeGuide } = usePlanNavigationActions({
+    plans,
+    authUser,
+    selectedPlanId,
+    mode,
+    guideReturnMode,
+    setPlans,
+    setSelectedPlanId,
+    setSelectedPlantId,
+    setMode,
+    setGuideReturnMode,
+    setAuthError,
+  })
+
   const signInWithGoogle = async () => {
     setAuthError('')
     if (!supabase) {
@@ -328,32 +343,6 @@ function App() {
     setAuthUser(null)
   }
 
-  const createNewPlan = () => {
-    const next = createPlan(`새 조감도 ${plans.length + 1}`, authUser)
-    setPlans((current) => [next, ...current])
-    setSelectedPlanId(next.id)
-    setSelectedPlantId(null)
-    setMode('edit')
-  }
-  const deletePlan = (planId: string) => {
-    const targetPlan = plans.find((plan) => plan.id === planId)
-    if (!targetPlan || getPlanRole(targetPlan, authUser) !== 'owner') return
-    const nextPlans = plans.filter((plan) => plan.id !== planId)
-    setPlans(nextPlans)
-    if (supabase && authUser) {
-      void supabase.from('plans').delete().eq('id', planId).then(({ error }) => {
-        if (error) setAuthError(`조감도를 삭제하지 못했습니다. ${error.message}`)
-      })
-    }
-    if (selectedPlanId === planId) { setSelectedPlanId(nextPlans[0]?.id ?? ''); setSelectedPlantId(null); setMode('list') }
-  }
-  const openPreview = (planId: string) => { setSelectedPlanId(planId); setSelectedPlantId(null); setMode('preview') }
-  const openEditor = (planId: string) => { setSelectedPlanId(planId); setSelectedPlantId(null); setMode('edit') }
-  const openGuide = () => {
-    setGuideReturnMode(mode === 'guide' ? 'list' : mode)
-    setMode('guide')
-  }
-  const closeGuide = () => setMode(guideReturnMode === 'guide' ? 'list' : guideReturnMode)
   const resetPaletteForm = () => {
     setEditingTemplateId(null)
     setNewPlantKind('deciduous')
