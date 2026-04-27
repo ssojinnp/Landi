@@ -2,8 +2,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import type { ChangeEvent, DragEvent } from 'react'
-import { HelpCircle, LogIn, LogOut, UserRound } from 'lucide-react'
 import { PlanThumbnail } from './components/canvas/PlanThumbnail'
+import { AuthControls } from './components/common/AuthControls'
+import { CompactGuideButton, GuideButton } from './components/common/GuideButtons'
 import { StaticPlanBoard } from './components/canvas/StaticPlanBoard'
 import { BoardSettingsPanel } from './components/editor/BoardSettingsPanel'
 import { ClearPlantsDialog } from './components/editor/ClearPlantsDialog'
@@ -11,6 +12,7 @@ import { EditorCanvas } from './components/editor/EditorCanvas'
 import { EditorHeader } from './components/editor/EditorHeader'
 import { EditorSidebarHeader } from './components/editor/EditorSidebarHeader'
 import { EditorStatusBanners } from './components/editor/EditorStatusBanners'
+import { EditorToolPanel } from './components/editor/EditorToolPanel'
 import { OrientationLockDialog } from './components/editor/OrientationLockDialog'
 import { PalettePanel } from './components/editor/PalettePanel'
 import { SchedulePanel } from './components/editor/SchedulePanel'
@@ -23,6 +25,7 @@ import { LoadingScreen } from './components/views/LoadingScreen'
 import { PreviewPage } from './components/views/PreviewPage'
 import { BOARD_WIDTH, STORAGE_KEY, flowerColorOptions, kindOptions } from './data/plants'
 import { clampPercent, clampPlantSize, getRepresentativeLabelIds } from './lib/canvasHelpers'
+import { createDemoPlans } from './lib/demoPlans'
 import { createPlan, createTemplate, getEditorMetadata, getMemberInitial, getMemberRoleLabel, getMemberStatusLabel, getPlanRoleLabel, getPlanUpdatedLabel, getTreeScaleLabel, groupTreeScaleItems, isTreeKind, loadPlans, migratePlan } from './lib/planHelpers'
 import { getPlanRole, getSessionUser, isSupabaseConfigured, normalizePlanForUser, planToSharedRow, sharedRowToPlan, supabase, type LandiUser, type SharedPlanRow } from './lib/supabase'
 import type { Plan, Plant, PlantKind, PlantTemplate, PlanRole, ViewMode } from './types'
@@ -706,38 +709,16 @@ function App() {
     setVisiblePlantCategories((current) => ({ ...current, [category]: !current[category] }))
   }
   const selectedPlantToolbarStyle = selectedPlant ? { left: Math.min(BOARD_WIDTH - 164, Math.max(8, selectedPlant.x + selectedPlant.size / 2 - 52)), top: Math.max(8, selectedPlant.y - 44) } : undefined
-  const authControls = authUser ? <div className="flex h-10 items-center overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"><div className="hidden min-w-0 max-w-[190px] items-center gap-2 px-3 text-sm font-semibold text-slate-700 md:flex" title={authUser.email}><UserRound size={16} className="shrink-0 text-[var(--landi-primary)]" /><span className="truncate">{authUser.name}</span></div><button type="button" onClick={signOut} title="로그아웃" className="grid h-10 w-10 place-items-center border-l border-slate-200 text-slate-600 transition hover:bg-slate-50" aria-label="로그아웃"><LogOut size={17} /></button></div> : <button type="button" onClick={signInWithGoogle} className={`${actionButtonClass} border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50`}><LogIn size={17} />Google 로그인</button>
-  const guideButton = <button type="button" onClick={openGuide} className={`${actionButtonClass} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}><HelpCircle size={17} />시작 가이드</button>
-  const compactGuideButton = <button type="button" onClick={openGuide} title="시작 가이드" aria-label="시작 가이드" className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"><HelpCircle size={17} /></button>
+  const authControls = <AuthControls authUser={authUser} actionButtonClass={actionButtonClass} onSignIn={signInWithGoogle} onSignOut={signOut} />
+  const guideButton = <GuideButton actionButtonClass={actionButtonClass} onOpenGuide={openGuide} />
+  const compactGuideButton = <CompactGuideButton onOpenGuide={openGuide} />
   const editablePlanCount = plans.filter((plan) => {
     const role = getPlanRole(plan, authUser)
     return role === 'owner' || role === 'editor'
   }).length
   const sharedPlanCount = plans.filter((plan) => getPlanRole(plan, authUser) !== 'owner').length
   const planWithBoardCount = plans.filter((plan) => Boolean(plan.backgroundUrl)).length
-  const demoPlans = useMemo(() => {
-    if (!authUser) return []
-
-    const joinedAt = new Date().toISOString()
-    const editorPlan = normalizePlanForUser({
-      ...createPlan('수정가능 테스트 조감도', authUser),
-      id: 'demo-editor-plan',
-      ownerId: 'demo-owner',
-      ownerEmail: 'owner@landi.test',
-      members: [{ id: 'demo-editor-member', email: authUser.email, role: 'editor', status: 'joined', joinedAt, invitedAt: joinedAt, invitedBy: 'owner@landi.test' }],
-      accessEmails: ['owner@landi.test', authUser.email],
-    }, authUser)
-    const viewerPlan = normalizePlanForUser({
-      ...createPlan('읽기전용 테스트 조감도', authUser),
-      id: 'demo-viewer-plan',
-      ownerId: 'demo-owner',
-      ownerEmail: 'owner@landi.test',
-      members: [{ id: 'demo-viewer-member', email: authUser.email, role: 'viewer', status: 'joined', joinedAt, invitedAt: joinedAt, invitedBy: 'owner@landi.test' }],
-      accessEmails: ['owner@landi.test', authUser.email],
-    }, authUser)
-
-    return [editorPlan, viewerPlan]
-  }, [authUser])
+  const demoPlans = useMemo(() => createDemoPlans(authUser), [authUser])
   const displayPlans = [...demoPlans, ...plans]
 
   if (isSupabaseConfigured && !authReady) return <LoadingScreen message="로그인 상태를 확인하고 있습니다." />
@@ -777,12 +758,7 @@ function App() {
       </section>
       <aside className="flex max-h-[48vh] min-h-0 w-full shrink-0 flex-col border-t border-slate-200 bg-[var(--landi-panel)] lg:h-screen lg:max-h-none lg:w-auto lg:flex-row lg:border-l lg:border-t-0">
         <ToolRail activeToolPanel={activeToolPanel} toolRailButtonClass={toolRailButtonClass} onTogglePanel={toggleToolPanel} onToggleRightPanel={toggleRightPanel} />
-        {activeToolPanel && <section className={`min-h-0 flex-1 px-4 py-3 md:px-5 lg:w-[286px] lg:flex-none ${activeToolPanel === 'schedule' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
-          <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-slate-700">{toolPanelLabel}</h2></div>
-{activeToolPanel === 'share' && <SharePanel selectedPlan={selectedPlan} selectedPlanRole={selectedPlanRole} ownerLabel={ownerLabel} roleLabel={roleLabel} authUserEmail={authUser?.email} canManageSelectedPlan={canManageSelectedPlan} inviteEmail={inviteEmail} inviteRole={inviteRole} inviteError={inviteError} inviteStatus={inviteStatus} isInviting={isInviting} setInviteEmail={setInviteEmail} clearInviteFeedback={() => { if (inviteError) setInviteError(''); if (inviteStatus) setInviteStatus('') }} setInviteRole={setInviteRole} inviteMember={inviteMember} updateMemberRole={updateMemberRole} removeMember={removeMember} getMemberInitial={getMemberInitial} getMemberRoleLabel={getMemberRoleLabel} getMemberStatusLabel={getMemberStatusLabel} />}
-{activeToolPanel === 'board' && <BoardSettingsPanel canUseBoardControls={canUseBoardControls} canEditSelectedPlan={canEditSelectedPlan} hasPlanBackground={hasPlanBackground} backgroundFade={backgroundFade} backgroundSaturation={backgroundSaturation} plantIntensity={plantIntensity} showPlantLabels={showPlantLabels} plantCategories={plantCategories} visiblePlantCategories={visiblePlantCategories} selectedPlantCount={selectedPlan.plants.length} setIsClearPlantsConfirmOpen={setIsClearPlantsConfirmOpen} updateBackgroundFade={(value) => updateSelectedPlan({ backgroundFade: value })} updateBackgroundSaturation={(value) => updateSelectedPlan({ backgroundSaturation: value })} updatePlantIntensity={(value) => updateSelectedPlan({ plantIntensity: value })} toggleShowPlantLabels={() => updateSelectedPlan({ showPlantLabels: !showPlantLabels })} togglePlantCategoryVisibility={togglePlantCategoryVisibility} />}
-          {activeToolPanel === 'schedule' && <SchedulePanel totalPlants={selectedPlan.plants.length} groupedInventory={groupedInventory} groupTreeScaleItems={groupTreeScaleItems} />}
-        </section>}
+        <EditorToolPanel activeToolPanel={activeToolPanel} toolPanelLabel={toolPanelLabel} sharePanel={<SharePanel selectedPlan={selectedPlan} selectedPlanRole={selectedPlanRole} ownerLabel={ownerLabel} roleLabel={roleLabel} authUserEmail={authUser?.email} canManageSelectedPlan={canManageSelectedPlan} inviteEmail={inviteEmail} inviteRole={inviteRole} inviteError={inviteError} inviteStatus={inviteStatus} isInviting={isInviting} setInviteEmail={setInviteEmail} clearInviteFeedback={() => { if (inviteError) setInviteError(''); if (inviteStatus) setInviteStatus('') }} setInviteRole={setInviteRole} inviteMember={inviteMember} updateMemberRole={updateMemberRole} removeMember={removeMember} getMemberInitial={getMemberInitial} getMemberRoleLabel={getMemberRoleLabel} getMemberStatusLabel={getMemberStatusLabel} />} boardPanel={<BoardSettingsPanel canUseBoardControls={canUseBoardControls} canEditSelectedPlan={canEditSelectedPlan} hasPlanBackground={hasPlanBackground} backgroundFade={backgroundFade} backgroundSaturation={backgroundSaturation} plantIntensity={plantIntensity} showPlantLabels={showPlantLabels} plantCategories={plantCategories} visiblePlantCategories={visiblePlantCategories} selectedPlantCount={selectedPlan.plants.length} setIsClearPlantsConfirmOpen={setIsClearPlantsConfirmOpen} updateBackgroundFade={(value) => updateSelectedPlan({ backgroundFade: value })} updateBackgroundSaturation={(value) => updateSelectedPlan({ backgroundSaturation: value })} updatePlantIntensity={(value) => updateSelectedPlan({ plantIntensity: value })} toggleShowPlantLabels={() => updateSelectedPlan({ showPlantLabels: !showPlantLabels })} togglePlantCategoryVisibility={togglePlantCategoryVisibility} />} schedulePanel={<SchedulePanel totalPlants={selectedPlan.plants.length} groupedInventory={groupedInventory} groupTreeScaleItems={groupTreeScaleItems} />} />
       </aside>
       <ClearPlantsDialog open={isClearPlantsConfirmOpen} onClose={() => setIsClearPlantsConfirmOpen(false)} onConfirm={clearPlacedPlants} />
     </main>
