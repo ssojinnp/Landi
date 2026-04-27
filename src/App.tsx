@@ -1,10 +1,11 @@
 ﻿
 import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
-import type { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent } from 'react'
-import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable'
+import type { ChangeEvent, DragEvent } from 'react'
 import { ArrowLeft, ChevronDown, ChevronUp, ClipboardList, Download, HelpCircle, ImagePlus, LogIn, LogOut, Minus, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pencil, Plus, SlidersHorizontal, Trash2, Trees, UserRound, Users } from 'lucide-react'
-import { PlantSymbol } from './components/canvas/PlantSymbol'
+import { PlacedPlant } from './components/canvas/PlacedPlant'
+import { PlanThumbnail } from './components/canvas/PlanThumbnail'
+import { StaticPlanBoard } from './components/canvas/StaticPlanBoard'
 import { BoardSettingsPanel } from './components/editor/BoardSettingsPanel'
 import { PalettePanel } from './components/editor/PalettePanel'
 import { SchedulePanel } from './components/editor/SchedulePanel'
@@ -14,35 +15,10 @@ import { ListPage } from './components/views/ListPage'
 import { LoadingScreen } from './components/views/LoadingScreen'
 import { PreviewPage } from './components/views/PreviewPage'
 import { BOARD_HEIGHT, BOARD_WIDTH, STORAGE_KEY, flowerColorOptions, kindOptions } from './data/plants'
+import { clampPercent, clampPlantSize, getRepresentativeLabelIds, PLANT_SIZE_MAX, PLANT_SIZE_MIN, PLANT_SIZE_STEP } from './lib/canvasHelpers'
 import { EMPTY_PLAN_TITLE, createPlan, createTemplate, getEditorMetadata, getMemberInitial, getMemberRoleLabel, getMemberStatusLabel, getPlanRoleLabel, getPlanUpdatedLabel, getTreeScaleLabel, groupTreeScaleItems, isTreeKind, loadPlans, migratePlan } from './lib/planHelpers'
 import { getPlanRole, getSessionUser, isSupabaseConfigured, normalizePlanForUser, planToSharedRow, sharedRowToPlan, supabase, type LandiUser, type SharedPlanRow } from './lib/supabase'
 import type { Plan, Plant, PlantKind, PlantTemplate, PlanRole, ViewMode } from './types'
-
-const PLANT_SIZE_MIN = 28
-const PLANT_SIZE_MAX = 190
-const PLANT_SIZE_STEP = 8
-const PLANT_SYMBOL_OFFSET_X = 4
-const PLANT_SYMBOL_OFFSET_Y = 3
-function clampPercent(value: number) {
-  return Math.min(100, Math.max(0, value))
-}
-
-function clampPlantSize(value: number) {
-  return Math.min(PLANT_SIZE_MAX, Math.max(PLANT_SIZE_MIN, value))
-}
-
-function getRepresentativeLabelIds(plants: Plant[]) {
-  const seenTemplateIds = new Set<string>()
-  const labelIds = new Set<string>()
-
-  plants.forEach((plant) => {
-    if (seenTemplateIds.has(plant.templateId)) return
-    seenTemplateIds.add(plant.templateId)
-    labelIds.add(plant.instanceId)
-  })
-
-  return labelIds
-}
 
 function getExportFormatFromFileName(fileName: string): 'png' | 'jpg' | null {
   const lowerName = fileName.toLowerCase()
@@ -60,7 +36,6 @@ async function canvasToImageBlob(canvas: HTMLCanvasElement, mimeType: string, qu
   return response.blob()
 }
 
-type ResizeAnchor = 'n' | 'e' | 's' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 type InspectorPanel = 'share' | 'board' | 'schedule'
 type SaveStatus = 'saved' | 'saving' | 'error'
 type PlantCategory = '나무' | '풀' | '꽃'
@@ -78,162 +53,6 @@ function getSaveStatusClass(status: SaveStatus) {
   if (status === 'saving') return 'text-[var(--landi-warning)]'
   if (status === 'error') return 'text-[var(--landi-danger)]'
   return 'text-slate-400'
-}
-
-
-function ResizeHandle({ anchor, onResizeStart }: { anchor: ResizeAnchor; onResizeStart: (anchor: ResizeAnchor, event: ReactPointerEvent<HTMLButtonElement>) => void }) {
-  const positionMap: Record<ResizeAnchor, string> = {
-    n: 'left-1/2 -top-1 -translate-x-1/2 cursor-ns-resize',
-    e: '-right-1 top-1/2 -translate-y-1/2 cursor-ew-resize',
-    s: 'left-1/2 -bottom-1 -translate-x-1/2 cursor-ns-resize',
-    w: '-left-1 top-1/2 -translate-y-1/2 cursor-ew-resize',
-    ne: '-right-1 -top-1 cursor-nesw-resize',
-    nw: '-left-1 -top-1 cursor-nwse-resize',
-    se: '-bottom-1 -right-1 cursor-nwse-resize',
-    sw: '-bottom-1 -left-1 cursor-nesw-resize',
-  }
-
-  return <button type="button" onPointerDown={(event) => onResizeStart(anchor, event)} className={`resize-handle export-hidden absolute h-2 w-2 touch-none rounded-[1.5px] border ${positionMap[anchor]}`} style={{ backgroundColor: '#2563eb', borderColor: '#ffffff' }} aria-label={`식재 ${anchor} 방향 크기 조절`} />
-}
-
-function PlantNameLabel({ plant, hoverOnly = false, exportHidden = false }: { plant: Plant; hoverOnly?: boolean; exportHidden?: boolean }) {
-  const shouldPlaceAbove = plant.y + plant.size + 76 > BOARD_HEIGHT
-  const verticalClass = shouldPlaceAbove ? 'bottom-[calc(100%-8px)]' : 'top-[calc(100%-10px)]'
-  const visibilityClass = hoverOnly ? 'opacity-0 transition-opacity group-hover:opacity-100' : ''
-
-  return (
-    <div
-      className={`${exportHidden ? 'export-hidden ' : ''}pointer-events-none absolute left-1/2 h-[18px] w-max max-w-[180px] -translate-x-1/2 overflow-hidden truncate whitespace-nowrap rounded-sm px-2 text-center text-[10px] font-semibold ${verticalClass} ${visibilityClass}`}
-      title={plant.name}
-      style={{ backgroundColor: 'rgba(255, 255, 255, 0.92)', border: '1px solid rgba(15, 23, 42, 0.10)', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.16)', color: '#334155', lineHeight: '18px', textOverflow: 'ellipsis' }}
-    >
-      <span className="landi-plant-label-text">{plant.name}</span>
-    </div>
-  )
-}
-
-function PlacedPlant({ plant, selected, plantIntensity, showLabel, boardScale, readOnly, onSelect, onMove, onResize }: { plant: Plant; selected: boolean; plantIntensity: number; showLabel: boolean; boardScale: number; readOnly: boolean; onSelect: () => void; onMove: (updates: Pick<Plant, 'x' | 'y'>) => void; onResize: (updates: Pick<Plant, 'x' | 'y' | 'size'>) => void }) {
-  const nodeRef = useRef<HTMLDivElement>(null)
-  const handles: ResizeAnchor[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
-  const normalizedIntensity = clampPercent(plantIntensity)
-  const symbolOpacity = Math.max(0.25, normalizedIntensity / 100)
-  const symbolFilter = `saturate(${80 + normalizedIntensity * 0.45}%) contrast(${90 + normalizedIntensity * 0.2}%)`
-
-  const startResize = (anchor: ResizeAnchor, event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (readOnly) return
-    event.preventDefault()
-    event.stopPropagation()
-    const startX = event.clientX
-    const startY = event.clientY
-    const startSize = plant.size
-    const startPlantX = plant.x
-    const startPlantY = plant.y
-
-    const move = (moveEvent: PointerEvent) => {
-      const deltaX = (moveEvent.clientX - startX) / boardScale
-      const deltaY = (moveEvent.clientY - startY) / boardScale
-      const horizontalDelta = anchor.includes('e') ? deltaX : anchor.includes('w') ? -deltaX : 0
-      const verticalDelta = anchor.includes('s') ? deltaY : anchor.includes('n') ? -deltaY : 0
-      const delta = anchor.length === 2 ? Math.abs(horizontalDelta) > Math.abs(verticalDelta) ? horizontalDelta : verticalDelta : horizontalDelta || verticalDelta
-      const nextSize = clampPlantSize(startSize + delta)
-      const sizeDelta = nextSize - startSize
-      onResize({
-        size: nextSize,
-        x: anchor.includes('w') ? startPlantX - sizeDelta : startPlantX,
-        y: anchor.includes('n') ? startPlantY - sizeDelta : startPlantY,
-      })
-    }
-
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
-  return (
-    <Draggable nodeRef={nodeRef} position={{ x: plant.x + PLANT_SYMBOL_OFFSET_X, y: plant.y + PLANT_SYMBOL_OFFSET_Y }} bounds="parent" cancel=".resize-handle" disabled={readOnly} scale={boardScale} onStop={(_: DraggableEvent, data: DraggableData) => onMove({ x: data.x - PLANT_SYMBOL_OFFSET_X, y: data.y - PLANT_SYMBOL_OFFSET_Y })}>
-      <div ref={nodeRef} onClick={(event) => { event.stopPropagation(); onSelect() }} className={`group absolute touch-none select-none ${readOnly ? 'cursor-default' : 'cursor-move'}`} style={{ width: plant.size + 16, height: plant.size + 20, filter: 'drop-shadow(0 24px 20px rgba(12, 26, 12, 0.42)) drop-shadow(8px 12px 10px rgba(42, 54, 36, 0.28))' }}>
-        <div className="relative" style={{ opacity: selected ? Math.min(0.92, symbolOpacity) : symbolOpacity, filter: symbolFilter }}>
-          <PlantSymbol plant={plant} />
-        </div>
-        {selected && !readOnly && <div className="export-hidden absolute left-2 top-2 rounded-md outline outline-1 outline-offset-0" style={{ width: plant.size, height: plant.size, outlineColor: '#2563eb' }}>{handles.map((anchor) => <ResizeHandle key={anchor} anchor={anchor} onResizeStart={startResize} />)}</div>}
-        {showLabel && <PlantNameLabel plant={plant} />}
-        {!showLabel && <PlantNameLabel plant={plant} hoverOnly exportHidden />}
-      </div>
-    </Draggable>
-  )
-}
-function PlanThumbnail({ plan }: { plan: Plan }) {
-  const frameRef = useRef<HTMLDivElement>(null)
-  const [scale, setScale] = useState(0.22)
-
-  useEffect(() => {
-    const frame = frameRef.current
-    if (!frame) return
-
-    const updateScale = () => setScale(frame.clientWidth / BOARD_WIDTH)
-    updateScale()
-
-    const observer = new ResizeObserver(updateScale)
-    observer.observe(frame)
-    return () => observer.disconnect()
-  }, [])
-
-  return (
-    <div ref={frameRef} className="relative aspect-[1120/640] overflow-hidden rounded-md border border-[var(--landi-board-border)] bg-[var(--landi-board)]">
-      <div className="absolute left-0 top-0 origin-top-left" style={{ width: BOARD_WIDTH, height: BOARD_HEIGHT, transform: `scale(${scale})` }}>
-        <StaticPlanBoard plan={plan} showEmptyState={false} />
-      </div>
-      {!plan.backgroundUrl && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[linear-gradient(180deg,rgba(248,250,252,0.08),rgba(248,250,252,0.22))]">
-          <div className="w-[min(76%,240px)] rounded-md border border-slate-200 bg-white/92 px-4 py-3 text-center shadow-[0_10px_26px_rgba(15,23,42,0.10)] backdrop-blur-sm">
-            <div className="mx-auto grid h-8 w-8 place-items-center rounded-md bg-slate-100 text-slate-500">
-              <ImagePlus size={16} />
-            </div>
-            <p className="mt-2 text-[12px] font-semibold text-slate-900">{EMPTY_PLAN_TITLE}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-function StaticPlanBoard({ plan, showEmptyState = true }: { plan: Plan; showEmptyState?: boolean }) {
-  const backgroundFade = clampPercent(plan.backgroundFade ?? 62)
-  const backgroundSaturation = clampPercent(plan.backgroundSaturation ?? 100)
-  const plantIntensity = clampPercent(plan.plantIntensity ?? 100)
-  const showPlantLabels = plan.showPlantLabels ?? false
-  const representativeLabelIds = getRepresentativeLabelIds(plan.plants)
-  const overlay = backgroundFade / 100
-  const symbolOpacity = Math.max(0.25, plantIntensity / 100)
-  const symbolFilter = `saturate(${80 + plantIntensity * 0.45}%) contrast(${90 + plantIntensity * 0.2}%)`
-
-  return (
-    <div className="relative h-[640px] w-[1120px] overflow-visible border border-[var(--landi-board-border)] bg-[var(--landi-board)]">
-      {plan.backgroundUrl ? (
-        <div className="absolute inset-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `linear-gradient(rgba(255,255,255,${overlay}), rgba(255,255,255,${overlay})), url(${plan.backgroundUrl})`, filter: `saturate(${backgroundSaturation}%)` }} />
-      ) : (
-        <div className="absolute inset-0 bg-[var(--landi-board)]" />
-      )}
-      {showEmptyState && !plan.backgroundUrl && plan.plants.length === 0 && (
-        <div className="absolute left-1/2 top-1/2 z-10 w-[min(320px,calc(100%-56px))] -translate-x-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-white/92 px-5 py-5 text-center shadow-[0_10px_26px_rgba(15,23,42,0.10)] backdrop-blur-sm">
-          <div className="mx-auto grid h-10 w-10 place-items-center rounded-md bg-slate-100 text-slate-500">
-            <ImagePlus size={20} />
-          </div>
-          <p className="mt-3 text-[14px] font-semibold text-slate-900">{EMPTY_PLAN_TITLE}</p>
-        </div>
-      )}
-      {plan.plants.map((plant) => (
-        <div key={plant.instanceId} className="absolute touch-none select-none" style={{ left: plant.x + PLANT_SYMBOL_OFFSET_X, top: plant.y + PLANT_SYMBOL_OFFSET_Y, width: plant.size + 16, height: plant.size + 20, filter: 'drop-shadow(0 24px 20px rgba(12, 26, 12, 0.42)) drop-shadow(8px 12px 10px rgba(42, 54, 36, 0.28))' }}>
-          <div style={{ opacity: symbolOpacity, filter: symbolFilter }}>
-            <PlantSymbol plant={plant} />
-          </div>
-          {showPlantLabels && representativeLabelIds.has(plant.instanceId) && <PlantNameLabel plant={plant} />}
-        </div>
-      ))}
-    </div>
-  )
 }
 function App() {
   const [plans, setPlans] = useState<Plan[]>(loadPlans)
