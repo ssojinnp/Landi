@@ -1,7 +1,6 @@
 ﻿
 import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
-import type { ChangeEvent, DragEvent } from 'react'
 import { PlanThumbnail } from './components/canvas/PlanThumbnail'
 import { AuthControls } from './components/common/AuthControls'
 import { CompactGuideButton, GuideButton } from './components/common/GuideButtons'
@@ -24,14 +23,15 @@ import { LoginRequiredPage } from './components/views/LoginRequiredPage'
 import { LoadingScreen } from './components/views/LoadingScreen'
 import { PreviewPage } from './components/views/PreviewPage'
 import { BOARD_WIDTH, STORAGE_KEY, flowerColorOptions, kindOptions } from './data/plants'
+import { usePlanEditorActions } from './hooks/usePlanEditorActions'
 import { useEditorLayout } from './hooks/useEditorLayout'
 import { usePlanAccessActions } from './hooks/usePlanAccessActions'
 import { usePlanNavigationActions } from './hooks/usePlanNavigationActions'
-import { clampPercent, clampPlantSize, getRepresentativeLabelIds } from './lib/canvasHelpers'
+import { clampPercent, getRepresentativeLabelIds } from './lib/canvasHelpers'
 import { createDemoPlans } from './lib/demoPlans'
-import { createTemplate, getEditorMetadata, getMemberInitial, getMemberRoleLabel, getMemberStatusLabel, getPlanRoleLabel, getPlanUpdatedLabel, getTreeScaleLabel, groupTreeScaleItems, isTreeKind, loadPlans, migratePlan } from './lib/planHelpers'
+import { getEditorMetadata, getMemberInitial, getMemberRoleLabel, getMemberStatusLabel, getPlanRoleLabel, getPlanUpdatedLabel, getTreeScaleLabel, groupTreeScaleItems, isTreeKind, loadPlans, migratePlan } from './lib/planHelpers'
 import { getPlanRole, getSessionUser, isSupabaseConfigured, normalizePlanForUser, planToSharedRow, sharedRowToPlan, supabase, type LandiUser, type SharedPlanRow } from './lib/supabase'
-import type { Plan, Plant, PlantKind, PlantTemplate, PlanRole, ViewMode } from './types'
+import type { Plan, Plant, PlantKind, PlanRole, ViewMode } from './types'
 
 function getExportFormatFromFileName(fileName: string): 'png' | 'jpg' | null {
   const lowerName = fileName.toLowerCase()
@@ -291,6 +291,7 @@ function App() {
     }))
   }
   const updatePlants = (updater: (plants: Plant[]) => Plant[]) => selectedPlan && updateSelectedPlan({ plants: updater(selectedPlan.plants) })
+  const { boardScale, setAllowPortraitEditing, isMobileViewport, shouldShowOrientationLock } = useEditorLayout({ mode, hasSelectedPlan: Boolean(selectedPlan), boardFrameRef })
 
   const inventory = useMemo(() => selectedPlan?.palette.map((template) => ({ ...template, count: selectedPlan.plants.filter((plant) => plant.templateId === template.id).length })) ?? [], [selectedPlan])
   const groupedInventory = useMemo(() => kindOptions.map((group) => {
@@ -310,6 +311,45 @@ function App() {
     setInviteEmail,
     setIsInviting,
     updateSelectedPlan,
+  })
+
+  const {
+    resetPaletteForm,
+    startEditTemplate,
+    addTemplateToPalette,
+    handlePaletteFormKeyDown,
+    deleteTemplateFromPalette,
+    addPlant,
+    updatePlant,
+    deleteSelectedPlant,
+    clearPlacedPlants,
+    handleUpload,
+    handleDrop,
+  } = usePlanEditorActions({
+    selectedPlan,
+    selectedPlant,
+    selectedPlantId,
+    canEditSelectedPlan,
+    canPlacePlants,
+    boardScale,
+    canvasRef,
+    editingTemplateId,
+    newPlantKind,
+    newPlantName,
+    newPlantLabel,
+    newFlowerColor,
+    flowerColorFallback: flowerColorOptions[0].value,
+    setEditingTemplateId,
+    setNewPlantKind,
+    setNewPlantName,
+    setNewPlantLabel,
+    setNewFlowerColor,
+    setPaletteFormError,
+    setSelectedPlantId,
+    setVisiblePlantCategories,
+    setIsClearPlantsConfirmOpen,
+    updateSelectedPlan,
+    updatePlants,
   })
 
   const { createNewPlan, deletePlan, openPreview, openEditor, openGuide, closeGuide } = usePlanNavigationActions({
@@ -343,108 +383,6 @@ function App() {
     setAuthUser(null)
   }
 
-  const resetPaletteForm = () => {
-    setEditingTemplateId(null)
-    setNewPlantKind('deciduous')
-    setNewPlantName('')
-    setNewPlantLabel('')
-    setNewFlowerColor(flowerColorOptions[0].value)
-  }
-
-  const startEditTemplate = (template: PlantTemplate) => {
-    if (!canEditSelectedPlan) return
-    setEditingTemplateId(template.id)
-    setNewPlantKind(template.kind)
-    setNewPlantName(template.name)
-    setNewPlantLabel(template.label)
-    setNewFlowerColor(template.colors.accent)
-    setPaletteFormError('')
-    setIsPaletteFormOpen(true)
-  }
-
-  const validatePaletteForm = () => {
-    if (!selectedPlan || !canEditSelectedPlan) return '조감도를 먼저 선택해주세요.'
-    const name = newPlantName.trim()
-    if (!name) return '식재명을 입력해주세요.'
-    const duplicateName = selectedPlan.palette.some((template) => template.id !== editingTemplateId && template.name.trim().toLocaleLowerCase('ko-KR') === name.toLocaleLowerCase('ko-KR'))
-    if (duplicateName) return '이미 등록된 식재명입니다.'
-    if (newPlantLabel.trim().length > 80) return '학명/메모는 80자 이하로 입력해주세요.'
-    return ''
-  }
-
-  const addTemplateToPalette = () => {
-    const error = validatePaletteForm()
-    if (error) {
-      setPaletteFormError(error)
-      return
-    }
-    if (!selectedPlan || !canEditSelectedPlan) return
-    setPaletteFormError('')
-    const nextTemplate = createTemplate(newPlantKind, newPlantName.trim(), newPlantLabel.trim(), newFlowerColor)
-
-    if (editingTemplateId) {
-      const updatedTemplate = { ...nextTemplate, id: editingTemplateId }
-      updateSelectedPlan({
-        palette: selectedPlan.palette.map((template) => (template.id === editingTemplateId ? updatedTemplate : template)),
-        plants: selectedPlan.plants.map((plant) =>
-          plant.templateId === editingTemplateId
-            ? { ...updatedTemplate, instanceId: plant.instanceId, templateId: plant.templateId, x: plant.x, y: plant.y, size: plant.size }
-            : plant,
-        ),
-      })
-      resetPaletteForm()
-      return
-    }
-
-    updateSelectedPlan({ palette: [...selectedPlan.palette, nextTemplate] })
-    resetPaletteForm()
-  }
-
-  const handlePaletteFormKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
-    event.preventDefault()
-    addTemplateToPalette()
-  }
-
-  const deleteTemplateFromPalette = (templateId: string) => {
-    if (!selectedPlan || !canEditSelectedPlan) return
-    updateSelectedPlan({
-      palette: selectedPlan.palette.filter((template) => template.id !== templateId),
-      plants: selectedPlan.plants.filter((plant) => plant.templateId !== templateId),
-    })
-    if (editingTemplateId === templateId) resetPaletteForm()
-    if (selectedPlant?.templateId === templateId) setSelectedPlantId(null)
-  }
-  const addPlant = (template: PlantTemplate, x = 520, y = 330) => {
-    if (!canPlacePlants) return
-    const instanceId = `${template.id}-${crypto.randomUUID()}`
-    const size = clampPlantSize(template.size)
-    setVisiblePlantCategories((current) => ({ ...current, [template.category as PlantCategory]: true }))
-    updatePlants((current) => [...current, { ...template, instanceId, templateId: template.id, size, x: x - size / 2, y: y - size / 2 }])
-    setSelectedPlantId(instanceId)
-  }
-  const updatePlant = (instanceId: string, updates: Partial<Plant>) => canEditSelectedPlan && updatePlants((current) => current.map((plant) => plant.instanceId === instanceId ? { ...plant, ...updates, ...(updates.size === undefined ? {} : { size: clampPlantSize(updates.size) }) } : plant))
-  const deleteSelectedPlant = () => { if (selectedPlantId && canEditSelectedPlan) { updatePlants((current) => current.filter((plant) => plant.instanceId !== selectedPlantId)); setSelectedPlantId(null) } }
-  const clearPlacedPlants = () => {
-    if (!canEditSelectedPlan || selectedPlan.plants.length === 0) return
-    updateSelectedPlan({ plants: [] })
-    setSelectedPlantId(null)
-    setIsClearPlantsConfirmOpen(false)
-  }
-  const handleUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file || !canEditSelectedPlan) return
-    const reader = new FileReader()
-    reader.onload = () => updateSelectedPlan({ backgroundUrl: String(reader.result) })
-    reader.readAsDataURL(file)
-  }
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    if (!selectedPlan || !canPlacePlants) return
-    const template = selectedPlan.palette.find((item) => item.id === event.dataTransfer.getData('template-id'))
-    const canvasBounds = canvasRef.current?.getBoundingClientRect()
-    if (template && canvasBounds) addPlant(template, (event.clientX - canvasBounds.left) / boardScale, (event.clientY - canvasBounds.top) / boardScale)
-  }
   const exportPlanImage = async () => {
     const exportNode = mode === 'preview' ? previewCanvasRef.current : canvasRef.current
     if (!exportNode || !selectedPlan || isExporting) return
@@ -547,7 +485,6 @@ function App() {
   const plantIntensity = clampPercent(selectedPlan?.plantIntensity ?? 100)
   const showPlantLabels = selectedPlan?.showPlantLabels ?? false
   const visiblePlants = useMemo(() => selectedPlan?.plants.filter((plant) => visiblePlantCategories[plant.category as PlantCategory] ?? true) ?? [], [selectedPlan?.plants, visiblePlantCategories])
-  const { boardScale, setAllowPortraitEditing, isMobileViewport, shouldShowOrientationLock } = useEditorLayout({ mode, hasSelectedPlan: Boolean(selectedPlan), boardFrameRef })
   const actionButtonClass = "landi-action-button inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 font-semibold shadow-sm transition"
   const leftPanelClass = `landi-editor-panel ${isPaletteCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-slate-200 bg-[var(--landi-panel)] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:border-b-0 lg:border-r ${isPaletteCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
   const roleLabel = selectedPlanRole === 'owner' ? '소유자' : selectedPlanRole === 'editor' ? '수정가능' : '읽기전용'
@@ -599,7 +536,7 @@ function App() {
       <aside className={leftPanelClass}>
         <EditorSidebarHeader isPaletteCollapsed={isPaletteCollapsed} onBack={() => setMode('list')} onToggleCollapse={() => setIsPaletteCollapsed((collapsed) => !collapsed)} />
         <div className={isPaletteCollapsed ? 'hidden' : ''}>
-          <PalettePanel selectedPlan={selectedPlan} hasPlanBackground={hasPlanBackground} canEditSelectedPlan={canEditSelectedPlan} canPlacePlants={canPlacePlants} editingTemplateId={editingTemplateId} isPaletteFormVisible={isPaletteFormVisible} newPlantKind={newPlantKind} newPlantName={newPlantName} newPlantLabel={newPlantLabel} newFlowerColor={newFlowerColor} paletteFormError={paletteFormError} setIsPaletteFormOpen={setIsPaletteFormOpen} setNewPlantKind={setNewPlantKind} setNewPlantName={setNewPlantName} setNewPlantLabel={setNewPlantLabel} setNewFlowerColor={setNewFlowerColor} clearPaletteFormError={() => { if (paletteFormError) setPaletteFormError('') }} addTemplateToPalette={addTemplateToPalette} resetPaletteForm={resetPaletteForm} handlePaletteFormKeyDown={handlePaletteFormKeyDown} addPlant={addPlant} startEditTemplate={startEditTemplate} deleteTemplateFromPalette={deleteTemplateFromPalette} isTreeKind={isTreeKind} groupTreeScaleItems={groupTreeScaleItems} getTreeScaleLabel={getTreeScaleLabel} />
+          <PalettePanel selectedPlan={selectedPlan} hasPlanBackground={hasPlanBackground} canEditSelectedPlan={canEditSelectedPlan} canPlacePlants={canPlacePlants} editingTemplateId={editingTemplateId} isPaletteFormVisible={isPaletteFormVisible} newPlantKind={newPlantKind} newPlantName={newPlantName} newPlantLabel={newPlantLabel} newFlowerColor={newFlowerColor} paletteFormError={paletteFormError} setIsPaletteFormOpen={setIsPaletteFormOpen} setNewPlantKind={setNewPlantKind} setNewPlantName={setNewPlantName} setNewPlantLabel={setNewPlantLabel} setNewFlowerColor={setNewFlowerColor} clearPaletteFormError={() => { if (paletteFormError) setPaletteFormError('') }} addTemplateToPalette={addTemplateToPalette} resetPaletteForm={resetPaletteForm} handlePaletteFormKeyDown={handlePaletteFormKeyDown} addPlant={addPlant} startEditTemplate={(template) => { startEditTemplate(template); setIsPaletteFormOpen(true) }} deleteTemplateFromPalette={deleteTemplateFromPalette} isTreeKind={isTreeKind} groupTreeScaleItems={groupTreeScaleItems} getTreeScaleLabel={getTreeScaleLabel} />
         </div>
       </aside>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
