@@ -6,7 +6,7 @@ export const BOARD_WIDTH = 1120
 export const BOARD_HEIGHT = 640
 
 export const kindOptions: PlantKindOption[] = [
-  { kind: 'deciduous', label: '나무', category: '나무', size: 90, colors: { primary: '#6f9f45', secondary: '#a5c96f', accent: '#dfe9ad', stroke: '#233c1f' } },
+  { kind: 'deciduous', label: '나무', category: '나무', size: 90, colors: { primary: '#5f8f3e', secondary: '#8fb95a', accent: '#c9dc7a', stroke: '#233c1f' } },
   { kind: 'groundcover', label: '풀', category: '풀', size: 50, colors: { primary: '#6d9c58', secondary: '#9bbb6a', accent: '#dbe9b7', stroke: '#38512f' } },
   { kind: 'flower', label: '꽃', category: '꽃', size: 56, colors: { primary: '#5c8a49', secondary: '#77a85c', accent: '#d58bd9', stroke: '#33492c' } },
 ]
@@ -22,12 +22,12 @@ export const flowerColorOptions = [
 
 export const plantToneOptions: Partial<Record<PlantKind, PlantColors[]>> = {
   deciduous: [
-    { primary: '#4f8738', secondary: '#8fc15f', accent: '#d7e89a', stroke: '#233c1f' },
-    { primary: '#6fa83f', secondary: '#b6d86c', accent: '#eef0a8', stroke: '#3d4d1f' },
-    { primary: '#3f7f59', secondary: '#76b985', accent: '#c7e6bb', stroke: '#264434' },
-    { primary: '#7f9140', secondary: '#c2c55f', accent: '#f0df92', stroke: '#4c4724' },
-    { primary: '#2f6f4b', secondary: '#68a96f', accent: '#bfe1a2', stroke: '#1f3d2c' },
-    { primary: '#86a84a', secondary: '#cbdc73', accent: '#f2e8a6', stroke: '#4a5128' },
+    { primary: '#446f32', secondary: '#78a84b', accent: '#bfd36c', stroke: '#20391e' },
+    { primary: '#648f36', secondary: '#9fbd55', accent: '#d8dc79', stroke: '#39491e' },
+    { primary: '#356d4c', secondary: '#68a56e', accent: '#aeca8e', stroke: '#233f31' },
+    { primary: '#6f7f38', secondary: '#acb653', accent: '#dbcf72', stroke: '#464323' },
+    { primary: '#285f42', secondary: '#5f9864', accent: '#9fc77c', stroke: '#1c3529' },
+    { primary: '#78923d', secondary: '#b8ca63', accent: '#e0d984', stroke: '#444d27' },
   ],
   shrub: [
     { primary: '#568d4a', secondary: '#86b76a', accent: '#d5e9a8', stroke: '#263d25' },
@@ -46,9 +46,9 @@ export const plantToneOptions: Partial<Record<PlantKind, PlantColors[]>> = {
 }
 
 export const defaultPalette: PlantTemplate[] = [
-  { id: 'pinus', kind: 'evergreen', category: '나무', name: '소나무', label: 'Pinus densiflora', size: 82, colors: { primary: '#4f8738', secondary: '#7ead58', accent: '#c8dc8e', stroke: '#233c1f' } },
-  { id: 'zelkova', kind: 'deciduous', category: '나무', name: '느티나무', label: 'Zelkova serrata', size: 94, colors: { primary: '#76a84d', secondary: '#a6c973', accent: '#dfe8ae', stroke: '#2b421f' } },
-  { id: 'buxus', kind: 'shrub', category: '나무', name: '회양목', label: 'Buxus microphylla', size: 58, colors: { primary: '#568d4a', secondary: '#86b76a', accent: '#d5e9a8', stroke: '#263d25' } },
+  { id: 'pinus', kind: 'evergreen', category: '나무', name: '소나무', label: 'Pinus densiflora', size: 82, colors: { primary: '#315f2e', secondary: '#5f8d48', accent: '#9ebd64', stroke: '#1f351d' } },
+  { id: 'zelkova', kind: 'deciduous', category: '나무', name: '느티나무', label: 'Zelkova serrata', size: 94, colors: { primary: '#5f8f3e', secondary: '#92b95c', accent: '#cadb7a', stroke: '#283f1e' } },
+  { id: 'buxus', kind: 'shrub', category: '나무', name: '회양목', label: 'Buxus microphylla', size: 58, colors: { primary: '#4a7d43', secondary: '#77a45f', accent: '#bdd286', stroke: '#263d25' } },
   { id: 'kochia', kind: 'groundcover', category: '풀', name: '댑싸리', label: 'Bassia scoparia', size: 56, colors: { primary: '#6d9c58', secondary: '#9bbb6a', accent: '#dbe9b7', stroke: '#38512f' } },
   { id: 'hydrangea', kind: 'flower', category: '꽃', name: '수국', label: 'Hydrangea macrophylla', size: 56, colors: { primary: '#568d4a', secondary: '#86b76a', accent: '#8fa8e8', stroke: '#263d25' } },
 ]
