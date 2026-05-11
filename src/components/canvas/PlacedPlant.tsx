@@ -40,7 +40,7 @@ export function PlacedPlant({ plant, selected, plantIntensity, showLabel, boardS
   const handles: ResizeAnchor[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
   const normalizedIntensity = clampPercent(plantIntensity)
   const symbolOpacity = Math.max(0.25, normalizedIntensity / 100)
-  const symbolFilter = `saturate(${80 + normalizedIntensity * 0.45}%) contrast(${90 + normalizedIntensity * 0.2}%)`
+  const symbolFilter = `saturate(${80 + normalizedIntensity * 0.45}%) contrast(${90 + normalizedIntensity * 0.2}%) drop-shadow(0 24px 20px rgba(12, 26, 12, 0.42)) drop-shadow(8px 12px 10px rgba(42, 54, 36, 0.28))`
   const defaultHitSize = Math.max(32, Math.min(plant.size * 0.58, 58))
   const groundcoverHitWidth = Math.max(30, Math.min(plant.size * 0.48, 48))
   const groundcoverHitHeight = Math.max(24, Math.min(plant.size * 0.38, 38))
@@ -128,9 +128,9 @@ export function PlacedPlant({ plant, selected, plantIntensity, showLabel, boardS
   return (
     <div
       className={`group pointer-events-none absolute touch-none select-none ${readOnly ? 'cursor-default' : 'cursor-move'}`}
-      style={{ left: plant.x + PLANT_SYMBOL_OFFSET_X, top: plant.y + PLANT_SYMBOL_OFFSET_Y, width: plant.size + 16, height: plant.size + 20, filter: 'drop-shadow(0 24px 20px rgba(12, 26, 12, 0.42)) drop-shadow(8px 12px 10px rgba(42, 54, 36, 0.28))' }}
+      style={{ left: plant.x + PLANT_SYMBOL_OFFSET_X, top: plant.y + PLANT_SYMBOL_OFFSET_Y, width: plant.size + 16, height: plant.size + 20 }}
     >
-        <div className="relative pointer-events-none" style={{ opacity: selected ? Math.min(0.92, symbolOpacity) : symbolOpacity, filter: symbolFilter }}>
+        <div className="relative pointer-events-none" style={{ opacity: symbolOpacity, filter: symbolFilter }}>
           <PlantSymbol plant={plant} />
         </div>
         <div

@@ -10,7 +10,7 @@ type PlantNameLabelProps = {
 export function PlantNameLabel({ plant, hoverOnly = false, exportHidden = false }: PlantNameLabelProps) {
   const shouldPlaceAbove = plant.y + plant.size + 76 > BOARD_HEIGHT
   const verticalClass = shouldPlaceAbove ? 'bottom-[calc(100%-8px)]' : 'top-[calc(100%-10px)]'
-  const visibilityClass = hoverOnly ? 'opacity-0 transition-opacity group-hover:opacity-100' : ''
+  const visibilityClass = hoverOnly ? 'invisible group-hover:visible' : ''
 
   return (
     <div
