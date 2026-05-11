@@ -32,9 +32,9 @@ export function PlantSymbol({ plant, selected = false }: PlantSymbolProps) {
         : [[0, -0.2, 0.18], [-0.24, -0.02, 0.18], [0.24, -0.02, 0.18], [-0.16, 0.22, 0.16], [0.16, 0.22, 0.16]]
     return (
       <svg width={boxWidth} height={boxHeight} viewBox={`0 0 ${boxWidth} ${boxHeight}`} className="block overflow-visible" aria-hidden="true">
-        <ellipse cx={center} cy={center + radius * 0.18} rx={radius * 0.82} ry={radius * 0.42} fill={colors.primary} opacity="0.26" />
-        {[-0.42, -0.12, 0.18, 0.44].map((offset, index) => <ellipse key={index} cx={center + radius * offset} cy={center + radius * (0.26 + (index % 2) * 0.08)} rx={radius * 0.24} ry={radius * 0.12} fill={index % 2 === 0 ? colors.primary : colors.secondary} opacity="0.56" transform={`rotate(${offset * 28} ${center + radius * offset} ${center + radius * 0.28})`} />)}
-        <path d={`M ${center - radius * 0.58} ${center + radius * 0.2} Q ${center - radius * 0.2} ${center - radius * 0.24} ${center + radius * 0.08} ${center + radius * 0.04} Q ${center + radius * 0.42} ${center - radius * 0.24} ${center + radius * 0.62} ${center + radius * 0.22}`} fill="none" stroke={colors.stroke} strokeWidth={Math.max(1, radius * 0.055)} strokeLinecap="round" opacity="0.36" />
+        <ellipse cx={center} cy={center + radius * 0.18} rx={radius * 0.82} ry={radius * 0.42} fill={colors.primary} opacity="0.38" />
+        {[-0.42, -0.12, 0.18, 0.44].map((offset, index) => <ellipse key={index} cx={center + radius * offset} cy={center + radius * (0.26 + (index % 2) * 0.08)} rx={radius * 0.24} ry={radius * 0.12} fill={index % 2 === 0 ? colors.primary : colors.secondary} opacity="0.72" transform={`rotate(${offset * 28} ${center + radius * offset} ${center + radius * 0.28})`} />)}
+        <path d={`M ${center - radius * 0.58} ${center + radius * 0.2} Q ${center - radius * 0.2} ${center - radius * 0.24} ${center + radius * 0.08} ${center + radius * 0.04} Q ${center + radius * 0.42} ${center - radius * 0.24} ${center + radius * 0.62} ${center + radius * 0.22}`} fill="none" stroke={colors.stroke} strokeWidth={Math.max(1.2, radius * 0.065)} strokeLinecap="round" opacity="0.5" />
         {bloomCenters.map(([x, y, scale], bloomIndex) => {
           const bloomCx = center + radius * x
           const bloomCy = center + radius * y
@@ -45,13 +45,13 @@ export function PlantSymbol({ plant, selected = false }: PlantSymbolProps) {
                 const angle = (Math.PI * 2 * index) / petalCount
                 const cx = bloomCx + Math.cos(angle) * radius * scale * 0.42
                 const cy = bloomCy + Math.sin(angle) * radius * scale * 0.38
-                return <ellipse key={index} cx={cx} cy={cy} rx={radius * scale * 0.28} ry={radius * scale * 0.44} fill={colors.accent} opacity="0.92" transform={`rotate(${(angle * 180) / Math.PI} ${cx} ${cy})`} />
+                return <ellipse key={index} cx={cx} cy={cy} rx={radius * scale * 0.28} ry={radius * scale * 0.44} fill={colors.accent} opacity="0.98" transform={`rotate(${(angle * 180) / Math.PI} ${cx} ${cy})`} />
               })}
               <circle cx={bloomCx} cy={bloomCy} r={radius * scale * 0.22} fill="#fff7bf" stroke="rgba(80,60,30,0.22)" strokeWidth="0.8" />
             </g>
           )
         })}
-        <ellipse cx={center} cy={center + radius * 0.18} rx={radius * 0.74} ry={radius * 0.48} fill="none" stroke={colors.stroke} strokeWidth="1.2" opacity="0.22" />
+        <ellipse cx={center} cy={center + radius * 0.18} rx={radius * 0.74} ry={radius * 0.48} fill="none" stroke={colors.stroke} strokeWidth="1.4" opacity="0.36" />
         {selected && <SelectionRing center={center} radius={radius} />}
       </svg>
     )

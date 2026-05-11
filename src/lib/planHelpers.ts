@@ -6,12 +6,14 @@ export const EMPTY_PLAN_TITLE = '등록된 도면이 없습니다'
 const LEGACY_LIRIOPE_IDS = new Set(['liriope'])
 const LEGACY_LIRIOPE_NAMES = new Set(['맥문동'])
 const KOCHIA_TEMPLATE = defaultPalette.find((template) => template.id === 'kochia') ?? defaultPalette[3]
+const HYDRANGEA_TEMPLATE = defaultPalette.find((template) => template.id === 'hydrangea') ?? defaultPalette[4]
 
 function isLegacyLiriopeTemplate(template: Pick<PlantTemplate, 'id' | 'name'>) {
   return LEGACY_LIRIOPE_IDS.has(template.id) || LEGACY_LIRIOPE_NAMES.has(template.name.trim())
 }
 
 function migrateTemplate(template: PlantTemplate): PlantTemplate {
+  if (template.id === HYDRANGEA_TEMPLATE.id) return { ...template, colors: HYDRANGEA_TEMPLATE.colors }
   if (!isLegacyLiriopeTemplate(template)) return template
   return {
     ...template,
@@ -26,6 +28,7 @@ function migrateTemplate(template: PlantTemplate): PlantTemplate {
 }
 
 function migratePlant(plant: Plant): Plant {
+  if (plant.templateId === HYDRANGEA_TEMPLATE.id || plant.id === HYDRANGEA_TEMPLATE.id) return { ...plant, colors: HYDRANGEA_TEMPLATE.colors }
   if (!isLegacyLiriopeTemplate(plant) && !LEGACY_LIRIOPE_IDS.has(plant.templateId)) return plant
   return {
     ...plant,

@@ -1,4 +1,4 @@
-import type { ChangeEvent, DragEvent, RefObject } from 'react'
+import type { ChangeEvent, DragEvent, MouseEvent, PointerEvent, RefObject } from 'react'
 import { ImagePlus, Minus, Plus, Trash2 } from 'lucide-react'
 import { PlacedPlant } from '../canvas/PlacedPlant'
 import { BOARD_HEIGHT, BOARD_WIDTH } from '../../data/plants'
@@ -15,18 +15,20 @@ type EditorCanvasProps = {
   showPlantLabels: boolean
   representativeLabelIds: Set<string>
   visiblePlants: Plant[]
-  selectedPlantId: string | null
+  selectedPlantIds: string[]
   selectedPlant?: Plant
   selectedPlantToolbarStyle?: { left: number; top: number }
   canEditSelectedPlan: boolean
   boardFrameRef: RefObject<HTMLDivElement | null>
   canvasRef: RefObject<HTMLDivElement | null>
-  onSelectPlant: (instanceId: string) => void
+  onSelectPlant: (instanceId: string, additive?: boolean) => void
   onClearSelection: () => void
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void
   onDrop: (event: DragEvent<HTMLDivElement>) => void
-  onUpdatePlant: (instanceId: string, updates: Partial<Plant>) => void
+  onUpdatePlant: (instanceId: string, updates: Partial<Plant>, options?: { recordHistory?: boolean }) => void
+  onBeginPlantTransform: () => void
   onDeleteSelectedPlant: () => void
+  onPickPlantAtPoint: (point: { x: number; y: number }, additive?: boolean) => void
 }
 
 export function EditorCanvas({
@@ -38,7 +40,7 @@ export function EditorCanvas({
   showPlantLabels,
   representativeLabelIds,
   visiblePlants,
-  selectedPlantId,
+  selectedPlantIds,
   selectedPlant,
   selectedPlantToolbarStyle,
   canEditSelectedPlan,
@@ -49,8 +51,21 @@ export function EditorCanvas({
   onUpload,
   onDrop,
   onUpdatePlant,
+  onBeginPlantTransform,
   onDeleteSelectedPlant,
+  onPickPlantAtPoint,
 }: EditorCanvasProps) {
+  const handleBoardPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!canEditSelectedPlan || !canvasRef.current || event.target !== event.currentTarget) return
+    event.preventDefault()
+    event.stopPropagation()
+    const bounds = canvasRef.current.getBoundingClientRect()
+    onPickPlantAtPoint({
+      x: (event.clientX - bounds.left) / boardScale,
+      y: (event.clientY - bounds.top) / boardScale,
+    }, event.shiftKey)
+  }
+
   return (
     <div ref={boardFrameRef} className="relative mx-auto w-full max-w-[1120px] rounded-md bg-white p-1.5 shadow-[0_18px_48px_rgba(47,55,43,0.12)] md:p-2">
       <div className="relative overflow-hidden" style={{ width: Math.ceil(BOARD_WIDTH * boardScale), maxWidth: '100%', height: Math.ceil(BOARD_HEIGHT * boardScale) }}>
@@ -58,6 +73,7 @@ export function EditorCanvas({
           ref={canvasRef}
           data-export-board="true"
           onClick={onClearSelection}
+          onPointerDown={handleBoardPointerDown}
           onDragOver={(event) => event.preventDefault()}
           onDrop={onDrop}
           className="relative origin-top-left overflow-visible border"
@@ -91,17 +107,18 @@ export function EditorCanvas({
             <PlacedPlant
               key={plant.instanceId}
               plant={plant}
-              selected={selectedPlantId === plant.instanceId}
+              selected={selectedPlantIds.includes(plant.instanceId)}
               plantIntensity={plantIntensity}
               showLabel={showPlantLabels && representativeLabelIds.has(plant.instanceId)}
               boardScale={boardScale}
               readOnly={!canEditSelectedPlan}
-              onSelect={() => onSelectPlant(plant.instanceId)}
-              onMove={(updates) => onUpdatePlant(plant.instanceId, updates)}
-              onResize={(updates) => onUpdatePlant(plant.instanceId, updates)}
+              onSelect={(event: MouseEvent<HTMLDivElement> | PointerEvent<HTMLDivElement>) => onSelectPlant(plant.instanceId, event.shiftKey)}
+              onTransformStart={onBeginPlantTransform}
+              onMove={(updates, options) => onUpdatePlant(plant.instanceId, updates, options)}
+              onResize={(updates, options) => onUpdatePlant(plant.instanceId, updates, options)}
             />
           ))}
-          {selectedPlant && canEditSelectedPlan && selectedPlantToolbarStyle && (
+          {selectedPlant && canEditSelectedPlan && selectedPlantToolbarStyle && selectedPlantIds.length <= 1 && (
             <div
               className="export-hidden absolute z-30 flex items-center gap-1 rounded-md border border-slate-200 bg-white/95 p-1 shadow-[0_12px_32px_rgba(15,23,42,0.18)] backdrop-blur"
               style={selectedPlantToolbarStyle}
@@ -135,6 +152,20 @@ export function EditorCanvas({
               </button>
               <span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
               <button type="button" onClick={onDeleteSelectedPlant} className="grid h-8 w-8 place-items-center rounded-md text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]" aria-label="선택 식물 삭제">
+                <Trash2 size={16} />
+              </button>
+            </div>
+          )}
+          {selectedPlant && canEditSelectedPlan && selectedPlantToolbarStyle && selectedPlantIds.length > 1 && (
+            <div
+              className="export-hidden absolute z-30 flex items-center gap-2 rounded-md border border-slate-200 bg-white/95 p-1 pl-3 shadow-[0_12px_32px_rgba(15,23,42,0.18)] backdrop-blur"
+              style={selectedPlantToolbarStyle}
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <span className="text-[12px] font-semibold text-slate-700">{selectedPlantIds.length}개 선택됨</span>
+              <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
+              <button type="button" onClick={onDeleteSelectedPlant} className="grid h-8 w-8 place-items-center rounded-md text-[var(--landi-danger)] hover:bg-[var(--landi-danger-soft)]" aria-label="선택 식재 삭제">
                 <Trash2 size={16} />
               </button>
             </div>

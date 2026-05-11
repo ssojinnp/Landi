@@ -1,9 +1,10 @@
 import type { ChangeEvent, ReactNode } from 'react'
-import { Download, ImagePlus, Pencil } from 'lucide-react'
+import { Download, ImagePlus, Pencil, RotateCcw } from 'lucide-react'
 
 type EditorHeaderProps = {
   title: string
   canEditSelectedPlan: boolean
+  canUndoPlanChange: boolean
   selectedPlanUpdatedLabel: string
   saveStatus: 'saved' | 'saving' | 'error'
   saveStatusLabel: string
@@ -13,6 +14,7 @@ type EditorHeaderProps = {
   actionButtonClass: string
   isExporting: boolean
   onTitleChange: (title: string) => void
+  onUndo: () => void
   onExport: () => void
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void
 }
@@ -20,6 +22,7 @@ type EditorHeaderProps = {
 export function EditorHeader({
   title,
   canEditSelectedPlan,
+  canUndoPlanChange,
   selectedPlanUpdatedLabel,
   saveStatus,
   saveStatusLabel,
@@ -29,6 +32,7 @@ export function EditorHeader({
   actionButtonClass,
   isExporting,
   onTitleChange,
+  onUndo,
   onExport,
   onUpload,
 }: EditorHeaderProps) {
@@ -46,6 +50,18 @@ export function EditorHeader({
       <div className="flex flex-wrap items-center gap-2">
         {authControls}
         {compactGuideButton}
+        {canEditSelectedPlan && (
+          <button
+            type="button"
+            title="되돌리기"
+            aria-label="되돌리기"
+            onClick={onUndo}
+            disabled={!canUndoPlanChange}
+            className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:shadow-none disabled:hover:bg-white"
+          >
+            <RotateCcw size={17} />
+          </button>
+        )}
         <button type="button" onClick={onExport} disabled={isExporting} className={`${actionButtonClass} bg-[var(--landi-primary)] text-white hover:bg-[var(--landi-primary-dark)] disabled:cursor-wait disabled:opacity-70`}>
           <Download size={17} />
           {isExporting ? '내보내는 중' : '내보내기'}

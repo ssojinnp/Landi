@@ -50,7 +50,7 @@ export const defaultPalette: PlantTemplate[] = [
   { id: 'zelkova', kind: 'deciduous', category: '나무', name: '느티나무', label: 'Zelkova serrata', size: 94, colors: { primary: '#76a84d', secondary: '#a6c973', accent: '#dfe8ae', stroke: '#2b421f' } },
   { id: 'buxus', kind: 'shrub', category: '나무', name: '회양목', label: 'Buxus microphylla', size: 58, colors: { primary: '#568d4a', secondary: '#86b76a', accent: '#d5e9a8', stroke: '#263d25' } },
   { id: 'kochia', kind: 'groundcover', category: '풀', name: '댑싸리', label: 'Bassia scoparia', size: 56, colors: { primary: '#6d9c58', secondary: '#9bbb6a', accent: '#dbe9b7', stroke: '#38512f' } },
-  { id: 'hydrangea', kind: 'flower', category: '꽃', name: '수국', label: 'Hydrangea macrophylla', size: 56, colors: { primary: '#628b4c', secondary: '#95b96f', accent: '#b8c8f2', stroke: '#33492c' } },
+  { id: 'hydrangea', kind: 'flower', category: '꽃', name: '수국', label: 'Hydrangea macrophylla', size: 56, colors: { primary: '#568d4a', secondary: '#86b76a', accent: '#8fa8e8', stroke: '#263d25' } },
 ]
 
 export const hedgePoints = [[110,70,28],[155,65,34],[206,64,30],[252,58,26],[305,60,39],[363,57,28],[418,62,33],[474,58,29],[532,62,35],[592,64,24],[653,67,29],[716,66,25],[780,70,30],[845,82,27],[895,122,24],[905,184,27],[900,249,30],[906,321,25],[901,392,27],[112,556,36],[205,558,35],[846,532,26]]

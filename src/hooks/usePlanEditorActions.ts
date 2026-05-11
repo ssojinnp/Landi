@@ -10,6 +10,7 @@ type UsePlanEditorActionsOptions = {
   selectedPlan?: Plan
   selectedPlant?: Plant
   selectedPlantId: string | null
+  selectedPlantIds: string[]
   canEditSelectedPlan: boolean
   canPlacePlants: boolean
   boardScale: number
@@ -27,16 +28,19 @@ type UsePlanEditorActionsOptions = {
   setNewFlowerColor: (value: string) => void
   setPaletteFormError: (value: string) => void
   setSelectedPlantId: (value: string | null) => void
+  setSelectedPlantIds: Dispatch<SetStateAction<string[]>>
   setVisiblePlantCategories: Dispatch<SetStateAction<Record<PlantCategory, boolean>>>
   setIsClearPlantsConfirmOpen: (value: boolean) => void
+  recordPlanSnapshot: () => void
   updateSelectedPlan: (updates: Partial<Plan>) => void
-  updatePlants: (updater: (plants: Plant[]) => Plant[]) => void
+  updatePlants: (updater: (plants: Plant[]) => Plant[], options?: { recordHistory?: boolean }) => void
 }
 
 export function usePlanEditorActions({
   selectedPlan,
   selectedPlant,
   selectedPlantId,
+  selectedPlantIds,
   canEditSelectedPlan,
   canPlacePlants,
   boardScale,
@@ -54,8 +58,10 @@ export function usePlanEditorActions({
   setNewFlowerColor,
   setPaletteFormError,
   setSelectedPlantId,
+  setSelectedPlantIds,
   setVisiblePlantCategories,
   setIsClearPlantsConfirmOpen,
+  recordPlanSnapshot,
   updateSelectedPlan,
   updatePlants,
 }: UsePlanEditorActionsOptions) {
@@ -129,8 +135,11 @@ export function usePlanEditorActions({
       plants: selectedPlan.plants.filter((plant) => plant.templateId !== templateId),
     })
     if (editingTemplateId === templateId) resetPaletteForm()
-    if (selectedPlant?.templateId === templateId) setSelectedPlantId(null)
-  }, [canEditSelectedPlan, editingTemplateId, resetPaletteForm, selectedPlan, selectedPlant?.templateId, setSelectedPlantId, updateSelectedPlan])
+    if (selectedPlant?.templateId === templateId) {
+      setSelectedPlantId(null)
+      setSelectedPlantIds([])
+    }
+  }, [canEditSelectedPlan, editingTemplateId, resetPaletteForm, selectedPlan, selectedPlant?.templateId, setSelectedPlantId, setSelectedPlantIds, updateSelectedPlan])
 
   const addPlant = useCallback((template: PlantTemplate, x = 520, y = 330) => {
     if (!canPlacePlants) return
@@ -139,25 +148,39 @@ export function usePlanEditorActions({
     setVisiblePlantCategories((current) => ({ ...current, [template.category as PlantCategory]: true }))
     updatePlants((current) => [...current, { ...template, instanceId, templateId: template.id, size, x: x - size / 2, y: y - size / 2 }])
     setSelectedPlantId(instanceId)
-  }, [canPlacePlants, setSelectedPlantId, setVisiblePlantCategories, updatePlants])
+    setSelectedPlantIds([instanceId])
+  }, [canPlacePlants, setSelectedPlantId, setSelectedPlantIds, setVisiblePlantCategories, updatePlants])
 
-  const updatePlant = useCallback((instanceId: string, updates: Partial<Plant>) => {
+  const updatePlant = useCallback((instanceId: string, updates: Partial<Plant>, options: { recordHistory?: boolean } = {}) => {
     if (!canEditSelectedPlan) return
-    updatePlants((current) => current.map((plant) => plant.instanceId === instanceId ? { ...plant, ...updates, ...(updates.size === undefined ? {} : { size: clampPlantSize(updates.size) }) } : plant))
-  }, [canEditSelectedPlan, updatePlants])
+    updatePlants((current) => {
+      const target = current.find((plant) => plant.instanceId === instanceId)
+      if (!target) return current
+      if (selectedPlantIds.length > 1 && selectedPlantIds.includes(instanceId) && (updates.x !== undefined || updates.y !== undefined)) {
+        const deltaX = updates.x === undefined ? 0 : updates.x - target.x
+        const deltaY = updates.y === undefined ? 0 : updates.y - target.y
+        const selectedSet = new Set(selectedPlantIds)
+        return current.map((plant) => selectedSet.has(plant.instanceId) ? { ...plant, x: plant.x + deltaX, y: plant.y + deltaY } : plant)
+      }
+      return current.map((plant) => plant.instanceId === instanceId ? { ...plant, ...updates, ...(updates.size === undefined ? {} : { size: clampPlantSize(updates.size) }) } : plant)
+    }, options)
+  }, [canEditSelectedPlan, selectedPlantIds, updatePlants])
 
   const deleteSelectedPlant = useCallback(() => {
     if (!selectedPlantId || !canEditSelectedPlan) return
-    updatePlants((current) => current.filter((plant) => plant.instanceId !== selectedPlantId))
+    const selectedSet = new Set(selectedPlantIds.length > 0 ? selectedPlantIds : [selectedPlantId])
+    updatePlants((current) => current.filter((plant) => !selectedSet.has(plant.instanceId)))
     setSelectedPlantId(null)
-  }, [canEditSelectedPlan, selectedPlantId, setSelectedPlantId, updatePlants])
+    setSelectedPlantIds([])
+  }, [canEditSelectedPlan, selectedPlantId, selectedPlantIds, setSelectedPlantId, setSelectedPlantIds, updatePlants])
 
   const clearPlacedPlants = useCallback(() => {
     if (!selectedPlan || !canEditSelectedPlan || selectedPlan.plants.length === 0) return
     updateSelectedPlan({ plants: [] })
     setSelectedPlantId(null)
+    setSelectedPlantIds([])
     setIsClearPlantsConfirmOpen(false)
-  }, [canEditSelectedPlan, selectedPlan, setIsClearPlantsConfirmOpen, setSelectedPlantId, updateSelectedPlan])
+  }, [canEditSelectedPlan, selectedPlan, setIsClearPlantsConfirmOpen, setSelectedPlantId, setSelectedPlantIds, updateSelectedPlan])
 
   const handleUpload = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -187,5 +210,6 @@ export function usePlanEditorActions({
     clearPlacedPlants,
     handleUpload,
     handleDrop,
+    recordPlanSnapshot,
   }
 }
