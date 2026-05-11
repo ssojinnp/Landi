@@ -1,5 +1,5 @@
 ﻿
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { PlanThumbnail } from './components/canvas/PlanThumbnail'
 import { AuthControls } from './components/common/AuthControls'
 import { CompactGuideButton, GuideButton } from './components/common/GuideButtons'
@@ -30,11 +30,12 @@ import { useInspectorPanelState } from './hooks/useInspectorPanelState'
 import { usePlanListState } from './hooks/usePlanListState'
 import { usePlanPersistence, type PlanSaveStatus } from './hooks/usePlanPersistence'
 import { usePlanNavigationActions } from './hooks/usePlanNavigationActions'
+import { usePlanSelectionActions } from './hooks/usePlanSelectionActions'
 import { useSelectedPlanState } from './hooks/useSelectedPlanState'
 import { useSupabaseAuth } from './hooks/useSupabaseAuth'
-import { getEditorMetadata, getMemberInitial, getMemberRoleLabel, getMemberStatusLabel, getPlanRoleLabel, getPlanUpdatedLabel, groupTreeScaleItems, isTreeKind, loadPlans } from './lib/planHelpers'
-import { isSupabaseConfigured, normalizePlanForUser } from './lib/supabase'
-import type { Plan, Plant, PlantKind, PlanRole, ViewMode } from './types'
+import { getMemberInitial, getMemberRoleLabel, getMemberStatusLabel, getPlanRoleLabel, getPlanUpdatedLabel, groupTreeScaleItems, isTreeKind, loadPlans } from './lib/planHelpers'
+import { isSupabaseConfigured } from './lib/supabase'
+import type { Plan, PlantKind, PlanRole, ViewMode } from './types'
 
 type PlantCategory = '나무' | '풀' | '꽃'
 const plantCategories: PlantCategory[] = ['나무', '풀', '꽃']
@@ -58,7 +59,6 @@ function App() {
   const [guideReturnMode, setGuideReturnMode] = useState<ViewMode>('list')
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null)
   const [selectedPlantIds, setSelectedPlantIds] = useState<string[]>([])
-  const [planUndoStack, setPlanUndoStack] = useState<Plan[]>([])
   const [isClearPlantsConfirmOpen, setIsClearPlantsConfirmOpen] = useState(false)
   const [newPlantKind, setNewPlantKind] = useState<PlantKind>('deciduous')
   const [newPlantName, setNewPlantName] = useState('')
@@ -123,93 +123,16 @@ function App() {
   })
   const isPaletteFormVisible = canEditSelectedPlan && isPaletteFormOpen
 
-  const recordPlanSnapshot = useCallback(() => {
-    if (!selectedPlan || !canEditSelectedPlan) return
-    setPlanUndoStack((current) => [...current.slice(-49), selectedPlan])
-  }, [canEditSelectedPlan, selectedPlan])
-  const updateSelectedPlan = (updates: Partial<Plan>, options: { recordHistory?: boolean } = {}) => {
-    if (!selectedPlan || !canEditSelectedPlan) return
-    if (options.recordHistory !== false) recordPlanSnapshot()
-    setPlans((current) => current.map((plan) => {
-      if (plan.id !== selectedPlan.id) return plan
-      const nextPlan = { ...plan, ...updates, updatedAt: new Date().toISOString(), ...getEditorMetadata(authUser) }
-      return authUser ? normalizePlanForUser(nextPlan, authUser) : nextPlan
-    }))
-  }
-  const updatePlants = (updater: (plants: Plant[]) => Plant[], options: { recordHistory?: boolean } = {}) => {
-    if (!selectedPlan) return
-    const nextPlants = updater(selectedPlan.plants)
-    if (nextPlants === selectedPlan.plants) return
-    updateSelectedPlan({ plants: nextPlants }, options)
-  }
-  const undoLastPlanChange = useCallback(() => {
-    if (!selectedPlan || !canEditSelectedPlan) return
-    setPlanUndoStack((current) => {
-      const previousPlan = current[current.length - 1]
-      if (!previousPlan) return current
-      setPlans((plansCurrent) => plansCurrent.map((plan) => (plan.id === previousPlan.id ? previousPlan : plan)))
-      setSelectedPlantId(null)
-      setSelectedPlantIds([])
-      return current.slice(0, -1)
-    })
-  }, [canEditSelectedPlan, selectedPlan])
-  const selectPlant = (instanceId: string, additive = false) => {
-    if (!canEditSelectedPlan) {
-      setSelectedPlantId(instanceId)
-      setSelectedPlantIds([instanceId])
-      return
-    }
-    if (additive) {
-      setSelectedPlantIds((current) => {
-        const exists = current.includes(instanceId)
-        const next = exists ? current.filter((id) => id !== instanceId) : [...current, instanceId]
-        setSelectedPlantId(next.at(-1) ?? null)
-        return next
-      })
-      return
-    }
-
-    setSelectedPlantId(instanceId)
-    setSelectedPlantIds([instanceId])
-    updatePlants((current) => {
-      const index = current.findIndex((plant) => plant.instanceId === instanceId)
-      if (index < 0 || index === current.length - 1) return current
-      const next = [...current]
-      const [target] = next.splice(index, 1)
-      next.push(target)
-      return next
-    })
-  }
-  const pickPlantAtPoint = (point: { x: number; y: number }, additive = false) => {
-    if (!selectedPlan || !canEditSelectedPlan) return
-    const hitPlants = selectedPlan.plants.filter((plant) => {
-      const centerX = plant.x + plant.size / 2
-      const centerY = plant.y + plant.size / 2
-      const radius = Math.max(18, Math.min(plant.size * 0.42, 44))
-      return Math.hypot(point.x - centerX, point.y - centerY) <= radius
-    })
-    if (hitPlants.length === 0) return
-    const currentIndex = hitPlants.findIndex((plant) => plant.instanceId === selectedPlantId)
-    const nextPlant = hitPlants[(currentIndex + 1) % hitPlants.length]
-    selectPlant(nextPlant.instanceId, additive)
-  }
-  const clearPlantSelection = () => {
-    setSelectedPlantId(null)
-    setSelectedPlantIds([])
-  }
-  useEffect(() => {
-    const handleUndoShortcut = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== 'z' || (!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey) return
-      if (mode !== 'edit') return
-      const target = event.target
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable)) return
-      event.preventDefault()
-      undoLastPlanChange()
-    }
-
-    window.addEventListener('keydown', handleUndoShortcut)
-    return () => window.removeEventListener('keydown', handleUndoShortcut)
-  }, [mode, undoLastPlanChange])
+  const { canUndoPlanChange, recordPlanSnapshot, updateSelectedPlan, updatePlants, undoLastPlanChange, selectPlant, pickPlantAtPoint, clearPlantSelection } = usePlanSelectionActions({
+    selectedPlan,
+    selectedPlantId,
+    authUser,
+    canEditSelectedPlan,
+    mode,
+    setPlans,
+    setSelectedPlantId,
+    setSelectedPlantIds,
+  })
   const { boardScale, setAllowPortraitEditing, isMobileViewport, shouldShowOrientationLock } = useEditorLayout({ mode, hasSelectedPlan: Boolean(selectedPlan), boardFrameRef })
 
   const { inviteMember, updateMemberRole, removeMember } = usePlanAccessActions({
@@ -295,7 +218,6 @@ function App() {
   const leftPanelClass = `landi-editor-panel ${isPaletteCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-slate-200 bg-[var(--landi-panel)] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:border-b-0 lg:border-r ${isPaletteCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
   const saveStatusLabel = getSaveStatusLabel(saveStatus)
   const saveStatusClass = getSaveStatusClass(saveStatus)
-  const canUndoPlanChange = canEditSelectedPlan && planUndoStack.length > 0
   const togglePlantCategoryVisibility = (category: PlantCategory) => {
     if (!canUseBoardControls) return
     if (visiblePlantCategories[category] && selectedPlant?.category === category) setSelectedPlantId(null)
