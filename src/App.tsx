@@ -1,5 +1,5 @@
 ﻿
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { PlanThumbnail } from './components/canvas/PlanThumbnail'
 import { AuthControls } from './components/common/AuthControls'
 import { CompactGuideButton, GuideButton } from './components/common/GuideButtons'
@@ -26,16 +26,16 @@ import { usePlanEditorActions } from './hooks/usePlanEditorActions'
 import { useEditorLayout } from './hooks/useEditorLayout'
 import { usePlanAccessActions } from './hooks/usePlanAccessActions'
 import { usePlanExport } from './hooks/usePlanExport'
+import { useInspectorPanelState } from './hooks/useInspectorPanelState'
+import { usePlanListState } from './hooks/usePlanListState'
 import { usePlanPersistence, type PlanSaveStatus } from './hooks/usePlanPersistence'
 import { usePlanNavigationActions } from './hooks/usePlanNavigationActions'
 import { useSelectedPlanState } from './hooks/useSelectedPlanState'
 import { useSupabaseAuth } from './hooks/useSupabaseAuth'
-import { createDemoPlans } from './lib/demoPlans'
 import { getEditorMetadata, getMemberInitial, getMemberRoleLabel, getMemberStatusLabel, getPlanRoleLabel, getPlanUpdatedLabel, getTreeScaleLabel, groupTreeScaleItems, isTreeKind, loadPlans } from './lib/planHelpers'
-import { getPlanRole, isSupabaseConfigured, normalizePlanForUser } from './lib/supabase'
+import { isSupabaseConfigured, normalizePlanForUser } from './lib/supabase'
 import type { Plan, Plant, PlantKind, PlanRole, ViewMode } from './types'
 
-type InspectorPanel = 'share' | 'board' | 'schedule'
 type PlantCategory = '나무' | '풀' | '꽃'
 const plantCategories: PlantCategory[] = ['나무', '풀', '꽃']
 const defaultVisiblePlantCategories: Record<PlantCategory, boolean> = { '나무': true, '풀': true, '꽃': true }
@@ -65,7 +65,6 @@ function App() {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
   const [isPaletteFormOpen, setIsPaletteFormOpen] = useState(false)
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1280)
-  const [activeToolPanel, setActiveToolPanel] = useState<InspectorPanel | null>(null)
   const [paletteFormError, setPaletteFormError] = useState('')
   const [exportError, setExportError] = useState('')
   const [isExporting, setIsExporting] = useState(false)
@@ -80,6 +79,7 @@ function App() {
   const boardFrameRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const previewCanvasRef = useRef<HTMLDivElement>(null)
+  const { activeToolPanel, toolPanelLabel, toolRailButtonClass, toggleToolPanel, toggleRightPanel } = useInspectorPanelState()
   const { authUser, authReady, signInWithGoogle, signOut } = useSupabaseAuth({ setAuthError })
   const { isSharedPlansLoading } = usePlanPersistence({
     plans,
@@ -212,10 +212,6 @@ function App() {
   const leftPanelClass = `landi-editor-panel ${isPaletteCollapsed ? 'is-collapsed' : ''} relative flex max-h-[42vh] min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-slate-200 bg-[var(--landi-panel)] transition-[width] duration-200 lg:h-screen lg:max-h-none lg:border-b-0 lg:border-r ${isPaletteCollapsed ? 'lg:w-14 xl:w-14' : 'lg:w-[260px] xl:w-[286px]'}`
   const saveStatusLabel = getSaveStatusLabel(saveStatus)
   const saveStatusClass = getSaveStatusClass(saveStatus)
-  const toolPanelLabel = activeToolPanel === 'share' ? '공유' : activeToolPanel === 'board' ? '보드 설정' : activeToolPanel === 'schedule' ? '수량 집계' : ''
-  const toolRailButtonClass = (panel: InspectorPanel) => `grid h-10 w-10 place-items-center rounded-md border text-sm transition ${activeToolPanel === panel ? 'border-[var(--landi-primary-border)] bg-[var(--landi-primary-soft)] text-[var(--landi-primary)] shadow-sm' : 'border-transparent text-slate-500 hover:border-slate-200 hover:bg-white hover:text-slate-700'}`
-  const toggleToolPanel = (panel: InspectorPanel) => setActiveToolPanel((current) => current === panel ? null : panel)
-  const toggleRightPanel = () => setActiveToolPanel((current) => current ? null : 'share')
   const togglePlantCategoryVisibility = (category: PlantCategory) => {
     if (!canUseBoardControls) return
     if (visiblePlantCategories[category] && selectedPlant?.category === category) setSelectedPlantId(null)
@@ -225,14 +221,7 @@ function App() {
   const authControls = <AuthControls authUser={authUser} actionButtonClass={actionButtonClass} onSignIn={signInWithGoogle} onSignOut={signOut} />
   const guideButton = <GuideButton actionButtonClass={actionButtonClass} onOpenGuide={openGuide} />
   const compactGuideButton = <CompactGuideButton onOpenGuide={openGuide} />
-  const editablePlanCount = plans.filter((plan) => {
-    const role = getPlanRole(plan, authUser)
-    return role === 'owner' || role === 'editor'
-  }).length
-  const sharedPlanCount = plans.filter((plan) => getPlanRole(plan, authUser) !== 'owner').length
-  const planWithBoardCount = plans.filter((plan) => Boolean(plan.backgroundUrl)).length
-  const demoPlans = useMemo(() => createDemoPlans(authUser), [authUser])
-  const displayPlans = [...demoPlans, ...plans]
+  const { editablePlanCount, sharedPlanCount, planWithBoardCount, displayPlans } = usePlanListState({ plans, authUser })
 
   if (isSupabaseConfigured && !authReady) return <LoadingScreen message="로그인 상태를 확인하고 있습니다." />
   if (mode === 'guide') return <GuidePage authControls={authControls} onBack={closeGuide} />
