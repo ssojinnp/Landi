@@ -250,7 +250,7 @@ function App() {
     <main data-theme="light" className="landi-app flex min-h-screen flex-col overflow-y-auto bg-[var(--landi-bg)] text-slate-900 lg:h-screen lg:min-h-0 lg:overflow-hidden lg:flex-row">
       <aside className={leftPanelClass}>
         <EditorSidebarHeader isPaletteCollapsed={isPaletteCollapsed} onBack={() => setMode('list')} onToggleCollapse={() => setIsPaletteCollapsed((collapsed) => !collapsed)} />
-        <div className={isPaletteCollapsed ? 'hidden' : ''}>
+        <div className={isPaletteCollapsed ? 'hidden' : 'flex min-h-0 flex-1 flex-col overflow-hidden'}>
           <PalettePanel selectedPlan={selectedPlan} hasPlanBackground={hasPlanBackground} canEditSelectedPlan={canEditSelectedPlan} canPlacePlants={canPlacePlants} editingTemplateId={editingTemplateId} isPaletteFormVisible={isPaletteFormVisible} newPlantKind={newPlantKind} newPlantName={newPlantName} newPlantLabel={newPlantLabel} newFlowerColor={newFlowerColor} paletteFormError={paletteFormError} setIsPaletteFormOpen={setIsPaletteFormOpen} setNewPlantKind={setNewPlantKind} setNewPlantName={setNewPlantName} setNewPlantLabel={setNewPlantLabel} setNewFlowerColor={setNewFlowerColor} clearPaletteFormError={() => { if (paletteFormError) setPaletteFormError('') }} addTemplateToPalette={addTemplateToPalette} resetPaletteForm={resetPaletteForm} handlePaletteFormKeyDown={handlePaletteFormKeyDown} addPlant={addPlant} startEditTemplate={(template) => { startEditTemplate(template); setIsPaletteFormOpen(true) }} deleteTemplateFromPalette={deleteTemplateFromPalette} isTreeKind={isTreeKind} groupTreeScaleItems={groupTreeScaleItems} />
         </div>
       </aside>

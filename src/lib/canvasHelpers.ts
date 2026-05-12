@@ -1,7 +1,7 @@
 import type { Plant } from '../types'
 
 export const PLANT_SIZE_MIN = 28
-export const PLANT_SIZE_MAX = 190
+export const PLANT_SIZE_MAX = 100
 export const PLANT_SIZE_STEP = 8
 export const PLANT_SYMBOL_OFFSET_X = 4
 export const PLANT_SYMBOL_OFFSET_Y = 3

@@ -1,7 +1,7 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Pencil, Plus, Sprout, Trash2 } from 'lucide-react'
 import { PlantSymbol } from '../canvas/PlantSymbol'
-import { flowerColorOptions, kindOptions } from '../../data/plants'
+import { flowerColorOptions, kindOptions, plantAssetSlotCount } from '../../data/plants'
 import type { Plan, PlantKind, PlantTemplate } from '../../types'
 
 type PalettePanelProps = {
@@ -59,20 +59,50 @@ export function PalettePanel({
   isTreeKind,
   groupTreeScaleItems,
 }: PalettePanelProps) {
+  const selectedKindOption = kindOptions.find((option) => option.kind === newPlantKind) ?? kindOptions[0]
+  const editingTemplate = editingTemplateId ? selectedPlan.palette.find((template) => template.id === editingTemplateId) : undefined
+  const sameKindTemplates = selectedPlan.palette.filter((template) => template.kind === newPlantKind && template.id !== editingTemplateId)
+  const usedAssetSlots = new Set(sameKindTemplates.map((template) => template.assetVariant).filter((value): value is number => value !== undefined))
+  const usedToneSlots = new Set(sameKindTemplates.map((template) => template.toneVariant).filter((value): value is number => value !== undefined))
+  const pickPreviewSlot = (usedSlots: Set<number>, slotCount: number, seed: number) => {
+    for (let offset = 0; offset < slotCount; offset += 1) {
+      const candidate = (seed + offset) % slotCount
+      if (!usedSlots.has(candidate)) return candidate
+    }
+    return seed % slotCount
+  }
+  const nextAssetVariant = editingTemplate?.kind === newPlantKind && editingTemplate.assetVariant !== undefined
+    ? editingTemplate.assetVariant
+    : pickPreviewSlot(usedAssetSlots, plantAssetSlotCount[newPlantKind], sameKindTemplates.length)
+  const nextToneVariant = editingTemplate?.kind === newPlantKind && editingTemplate.toneVariant !== undefined
+    ? editingTemplate.toneVariant
+    : pickPreviewSlot(usedToneSlots, 13, sameKindTemplates.length * 3)
+  const previewTemplate: PlantTemplate = {
+    id: `preview-${newPlantKind}-${nextAssetVariant}-${nextToneVariant}`,
+    kind: newPlantKind,
+    category: selectedKindOption.category,
+    name: newPlantName.trim() || selectedKindOption.label,
+    label: newPlantLabel.trim() || selectedKindOption.label,
+    size: selectedKindOption.size,
+    colors: newPlantKind === 'flower' ? { ...selectedKindOption.colors, accent: newFlowerColor } : selectedKindOption.colors,
+    assetVariant: nextAssetVariant,
+    toneVariant: nextToneVariant,
+  }
+
   return (
-    <section className="flex min-h-0 flex-1 flex-col px-4 py-3 lg:overflow-hidden">
-      <div className="mb-3 flex items-center justify-between">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3">
+      <div className="mb-3 flex shrink-0 items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-700">식재 팔레트</h2>
         <Sprout size={17} className="text-[var(--landi-primary)]" />
       </div>
 
       {!hasPlanBackground && (
-        <div className="mb-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-[12px] leading-5 text-slate-500 shadow-sm">
+        <div className="mb-3 shrink-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-[12px] leading-5 text-slate-500 shadow-sm">
           {canEditSelectedPlan ? '도면 업로드 후 식재를 도면 위에 배치할 수 있습니다.' : '읽기전용 권한에서는 식재 배치와 편집 기능을 사용할 수 없습니다.'}
         </div>
       )}
 
-      <div className="mb-3 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
+      <div className="mb-3 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
         <button
           type="button"
           onClick={() => canEditSelectedPlan && setIsPaletteFormOpen((open) => !open)}
@@ -122,6 +152,16 @@ export function PalettePanel({
               </div>
             )}
 
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-slate-50/70 p-2">
+              <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-md bg-white ring-1 ring-slate-200">
+                <PlantSymbol plant={{ ...previewTemplate, size: 34 }} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[12px] font-semibold text-slate-700">샘플 {nextAssetVariant + 1}</div>
+                <div className="mt-0.5 truncate text-[11.5px] font-medium text-slate-500">동일 타입 안에서 중복을 피해서 자동 배정됩니다.</div>
+              </div>
+            </div>
+
             <input
               value={newPlantLabel}
               onChange={(event) => {
@@ -146,7 +186,7 @@ export function PalettePanel({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
         {kindOptions.map((group) => {
           const groupTemplates = selectedPlan.palette.filter((template) => template.category === group.category)
           const templateSections = group.category === '나무' ? groupTreeScaleItems(groupTemplates) : [{ label: null, items: groupTemplates }]

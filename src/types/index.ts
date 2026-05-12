@@ -19,6 +19,8 @@ export interface PlantTemplate {
   label: string
   size: number
   colors: PlantColors
+  assetVariant?: number
+  toneVariant?: number
 }
 
 export interface Plant extends PlantTemplate {

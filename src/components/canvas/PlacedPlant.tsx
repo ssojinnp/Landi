@@ -40,13 +40,13 @@ export function PlacedPlant({ plant, selected, plantIntensity, showLabel, boardS
   const handles: ResizeAnchor[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
   const normalizedIntensity = clampPercent(plantIntensity)
   const symbolOpacity = Math.max(0.25, normalizedIntensity / 100)
-  const symbolFilter = `saturate(${80 + normalizedIntensity * 0.45}%) contrast(${90 + normalizedIntensity * 0.2}%) drop-shadow(0 24px 20px rgba(12, 26, 12, 0.42)) drop-shadow(8px 12px 10px rgba(42, 54, 36, 0.28))`
+  const symbolFilter = `saturate(${80 + normalizedIntensity * 0.45}%) contrast(${90 + normalizedIntensity * 0.2}%)`
   const defaultHitSize = Math.max(32, Math.min(plant.size * 0.58, 58))
   const groundcoverHitWidth = Math.max(30, Math.min(plant.size * 0.48, 48))
   const groundcoverHitHeight = Math.max(24, Math.min(plant.size * 0.38, 38))
-  const defaultSelectionSize = Math.max(32, Math.min(plant.size * 0.66, 72))
-  const groundcoverSelectionWidth = Math.max(30, Math.min(plant.size * 0.58, 64))
-  const groundcoverSelectionHeight = Math.max(24, Math.min(plant.size * 0.46, 48))
+  const defaultSelectionSize = Math.max(34, Math.min(plant.size * 0.88, 96))
+  const groundcoverSelectionWidth = Math.max(32, Math.min(plant.size * 0.86, 90))
+  const groundcoverSelectionHeight = Math.max(28, Math.min(plant.size * 0.74, 78))
   const hitAreaStyle =
     plant.kind === 'groundcover'
       ? { left: 8 + plant.size * 0.5 - groundcoverHitWidth / 2, top: 8 + plant.size * 0.64 - groundcoverHitHeight / 2, width: groundcoverHitWidth, height: groundcoverHitHeight }

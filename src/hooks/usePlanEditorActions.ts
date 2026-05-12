@@ -102,10 +102,17 @@ export function usePlanEditorActions({
     if (!selectedPlan || !canEditSelectedPlan) return
 
     setPaletteFormError('')
-    const nextTemplate = createTemplate(newPlantKind, newPlantName.trim(), newPlantLabel.trim(), newFlowerColor)
+    const nextTemplate = createTemplate(newPlantKind, newPlantName.trim(), newPlantLabel.trim(), newFlowerColor, selectedPlan.palette)
 
     if (editingTemplateId) {
-      const updatedTemplate = { ...nextTemplate, id: editingTemplateId }
+      const currentTemplate = selectedPlan.palette.find((template) => template.id === editingTemplateId)
+      const shouldKeepVariants = currentTemplate?.kind === nextTemplate.kind
+      const updatedTemplate = {
+        ...nextTemplate,
+        id: editingTemplateId,
+        assetVariant: shouldKeepVariants ? currentTemplate?.assetVariant ?? nextTemplate.assetVariant : nextTemplate.assetVariant,
+        toneVariant: shouldKeepVariants ? currentTemplate?.toneVariant ?? nextTemplate.toneVariant : nextTemplate.toneVariant,
+      }
       updateSelectedPlan({
         palette: selectedPlan.palette.map((template) => (template.id === editingTemplateId ? updatedTemplate : template)),
         plants: selectedPlan.plants.map((plant) =>

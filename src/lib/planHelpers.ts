@@ -1,4 +1,5 @@
-import { STORAGE_KEY, defaultPalette, flowerColorOptions, kindOptions, plantToneOptions } from '../data/plants'
+import { STORAGE_KEY, defaultPalette, flowerColorOptions, kindOptions, plantAssetSlotCount, plantToneOptions } from '../data/plants'
+import { clampPlantSize } from './canvasHelpers'
 import { normalizePlanForUser, type LandiUser } from './supabase'
 import type { Plan, Plant, PlantKind, PlantTemplate, PlanMember, PlanRole } from '../types'
 
@@ -7,14 +8,15 @@ const LEGACY_LIRIOPE_IDS = new Set(['liriope'])
 const LEGACY_LIRIOPE_NAMES = new Set(['맥문동'])
 const KOCHIA_TEMPLATE = defaultPalette.find((template) => template.id === 'kochia') ?? defaultPalette[3]
 const HYDRANGEA_TEMPLATE = defaultPalette.find((template) => template.id === 'hydrangea') ?? defaultPalette[4]
+const TONE_SLOT_COUNT = 13
 
 function isLegacyLiriopeTemplate(template: Pick<PlantTemplate, 'id' | 'name'>) {
   return LEGACY_LIRIOPE_IDS.has(template.id) || LEGACY_LIRIOPE_NAMES.has(template.name.trim())
 }
 
 function migrateTemplate(template: PlantTemplate): PlantTemplate {
-  if (template.id === HYDRANGEA_TEMPLATE.id) return { ...template, colors: HYDRANGEA_TEMPLATE.colors }
-  if (!isLegacyLiriopeTemplate(template)) return template
+  if (template.id === HYDRANGEA_TEMPLATE.id) return { ...template, size: clampPlantSize(template.size), colors: HYDRANGEA_TEMPLATE.colors }
+  if (!isLegacyLiriopeTemplate(template)) return { ...template, size: clampPlantSize(template.size) }
   return {
     ...template,
     id: KOCHIA_TEMPLATE.id,
@@ -28,8 +30,8 @@ function migrateTemplate(template: PlantTemplate): PlantTemplate {
 }
 
 function migratePlant(plant: Plant): Plant {
-  if (plant.templateId === HYDRANGEA_TEMPLATE.id || plant.id === HYDRANGEA_TEMPLATE.id) return { ...plant, colors: HYDRANGEA_TEMPLATE.colors }
-  if (!isLegacyLiriopeTemplate(plant) && !LEGACY_LIRIOPE_IDS.has(plant.templateId)) return plant
+  if (plant.templateId === HYDRANGEA_TEMPLATE.id || plant.id === HYDRANGEA_TEMPLATE.id) return { ...plant, size: clampPlantSize(plant.size), colors: HYDRANGEA_TEMPLATE.colors }
+  if (!isLegacyLiriopeTemplate(plant) && !LEGACY_LIRIOPE_IDS.has(plant.templateId)) return { ...plant, size: clampPlantSize(plant.size) }
   return {
     ...plant,
     templateId: KOCHIA_TEMPLATE.id,
@@ -37,19 +39,52 @@ function migratePlant(plant: Plant): Plant {
     category: KOCHIA_TEMPLATE.category,
     name: KOCHIA_TEMPLATE.name,
     label: KOCHIA_TEMPLATE.label,
-    size: plant.size ?? KOCHIA_TEMPLATE.size,
+    size: clampPlantSize(plant.size ?? KOCHIA_TEMPLATE.size),
     colors: KOCHIA_TEMPLATE.colors,
   }
 }
 
+function pickUnusedSlot(usedSlots: Set<number>, slotCount: number, seed: number) {
+  for (let offset = 0; offset < slotCount; offset += 1) {
+    const candidate = (seed + offset) % slotCount
+    if (!usedSlots.has(candidate)) return candidate
+  }
+  return seed % slotCount
+}
+
+function assignPaletteVariants(palette: PlantTemplate[]) {
+  const usedAssetSlots = new Map<PlantKind, Set<number>>()
+  const usedToneSlots = new Map<PlantKind, Set<number>>()
+
+  return palette.map((template, index) => {
+    const assetSlotCount = plantAssetSlotCount[template.kind]
+    const assetSlots = usedAssetSlots.get(template.kind) ?? new Set<number>()
+    const toneSlots = usedToneSlots.get(template.kind) ?? new Set<number>()
+    const assetVariant = template.assetVariant ?? pickUnusedSlot(assetSlots, assetSlotCount, index)
+    const toneVariant = template.toneVariant ?? pickUnusedSlot(toneSlots, TONE_SLOT_COUNT, index * 3)
+
+    assetSlots.add(assetVariant % assetSlotCount)
+    toneSlots.add(toneVariant % TONE_SLOT_COUNT)
+    usedAssetSlots.set(template.kind, assetSlots)
+    usedToneSlots.set(template.kind, toneSlots)
+
+    return { ...template, assetVariant, toneVariant }
+  })
+}
+
 export function migratePlan(plan: Plan): Plan {
-  const migratedPalette = Array.from(
+  const migratedPalette = assignPaletteVariants(Array.from(
     new Map(plan.palette.map((template) => {
       const migratedTemplate = migrateTemplate(template)
       return [migratedTemplate.id, migratedTemplate] as const
     })).values(),
-  )
-  const migratedPlants = plan.plants.map((plant) => migratePlant(plant))
+  ))
+  const paletteById = new Map(migratedPalette.map((template) => [template.id, template]))
+  const migratedPlants = plan.plants.map((plant) => {
+    const migratedPlant = migratePlant(plant)
+    const template = paletteById.get(migratedPlant.templateId)
+    return template ? { ...migratedPlant, assetVariant: template.assetVariant, toneVariant: template.toneVariant } : migratedPlant
+  })
   return {
     ...plan,
     palette: migratedPalette,
@@ -94,13 +129,20 @@ export function loadPlans(): Plan[] {
   }
 }
 
-export function createTemplate(kind: PlantKind, name: string, label = '', flowerAccent = flowerColorOptions[0].value): PlantTemplate {
+export function createTemplate(kind: PlantKind, name: string, label = '', flowerAccent = flowerColorOptions[0].value, palette: PlantTemplate[] = []): PlantTemplate {
   const option = kindOptions.find((item) => item.kind === kind) ?? kindOptions.find((item) => item.category === '나무') ?? kindOptions[0]
   const toneSet = plantToneOptions[kind]
   const generatedTone = toneSet?.[Math.floor(Math.random() * toneSet.length)]
   const colors = kind === 'flower' ? { ...option.colors, accent: flowerAccent } : (generatedTone ?? option.colors)
   const size = kind === 'shrub' ? 58 : option.size
-  return { id: `${kind}-${crypto.randomUUID()}`, kind, category: option.category, name: name.trim(), label: label.trim() || option.label, size, colors }
+  const sameKindTemplates = palette.filter((template) => template.kind === kind)
+  const usedAssetSlots = new Set(sameKindTemplates.map((template) => template.assetVariant).filter((value): value is number => value !== undefined))
+  const usedToneSlots = new Set(sameKindTemplates.map((template) => template.toneVariant).filter((value): value is number => value !== undefined))
+  const seed = sameKindTemplates.length
+  const assetVariant = pickUnusedSlot(usedAssetSlots, plantAssetSlotCount[kind], seed)
+  const toneVariant = pickUnusedSlot(usedToneSlots, TONE_SLOT_COUNT, seed * 3)
+
+  return { id: `${kind}-${crypto.randomUUID()}`, kind, category: option.category, name: name.trim(), label: label.trim() || option.label, size, colors, assetVariant, toneVariant }
 }
 
 export function formatRelativeTime(isoDate?: string) {
